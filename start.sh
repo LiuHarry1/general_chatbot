@@ -1,43 +1,43 @@
 #!/bin/bash
 
 echo "Starting AI Assistant..."
+echo "This script will start both frontend and backend services."
 echo
 
-# Check if .env exists
-if [ ! -f .env ]; then
-    echo "Creating .env file from template..."
-    cp env.example .env
-    echo
-    echo "Please edit .env file and add your API keys before running again."
-    echo
-    exit 1
-fi
+# Function to cleanup background processes
+cleanup() {
+    echo "Stopping services..."
+    kill $BACKEND_PID 2>/dev/null
+    kill $FRONTEND_PID 2>/dev/null
+    exit 0
+}
 
-# Install dependencies if node_modules doesn't exist
-if [ ! -d node_modules ]; then
-    echo "Installing dependencies..."
-    npm install
-    echo
-fi
+# Set up signal handlers
+trap cleanup SIGINT SIGTERM
 
-if [ ! -d client/node_modules ]; then
-    echo "Installing client dependencies..."
-    cd client
-    npm install
-    cd ..
-    echo
-fi
+# Start backend
+echo "Starting Python backend..."
+cd server
+./start.sh &
+BACKEND_PID=$!
+cd ..
 
-# Create logs directory
-if [ ! -d logs ]; then
-    mkdir logs
-fi
+# Wait a moment for backend to start
+sleep 2
 
-# Start the application
-echo "Starting AI Assistant..."
-echo "Frontend will be available at: http://localhost:3000"
-echo "Backend API will be available at: http://localhost:3001"
+# Start frontend
+echo "Starting React frontend..."
+cd client
+./start.sh &
+FRONTEND_PID=$!
+cd ..
+
 echo
-npm run dev
+echo "Both services are starting..."
+echo "Frontend: http://localhost:3000"
+echo "Backend: http://localhost:3001"
+echo "Press Ctrl+C to stop all services"
+echo
 
-
+# Wait for both processes
+wait $BACKEND_PID $FRONTEND_PID

@@ -1,43 +1,24 @@
 @echo off
+
 echo Starting AI Assistant...
+echo This script will start both frontend and backend services.
 echo.
 
-REM Check if .env exists
-if not exist .env (
-    echo Creating .env file from template...
-    copy env.example .env
-    echo.
-    echo Please edit .env file and add your API keys before running again.
-    echo.
-    pause
-    exit /b 1
-)
+REM Start backend in a new window
+echo Starting Python backend...
+start "Python Backend" cmd /c "cd server && start.bat"
 
-REM Install dependencies if node_modules doesn't exist
-if not exist node_modules (
-    echo Installing dependencies...
-    npm install
-    echo.
-)
+REM Wait a moment for backend to start
+timeout /t 3 /nobreak >nul
 
-if not exist client\node_modules (
-    echo Installing client dependencies...
-    cd client
-    npm install
-    cd ..
-    echo.
-)
+REM Start frontend in a new window
+echo Starting React frontend...
+start "React Frontend" cmd /c "cd client && start.bat"
 
-REM Create logs directory
-if not exist logs (
-    mkdir logs
-)
-
-REM Start the application
-echo Starting AI Assistant...
-echo Frontend will be available at: http://localhost:3000
-echo Backend API will be available at: http://localhost:3001
 echo.
-npm run dev
-
-
+echo Both services are starting...
+echo Frontend: http://localhost:3000
+echo Backend: http://localhost:3001
+echo Check the opened windows for service status.
+echo.
+pause

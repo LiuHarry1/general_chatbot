@@ -2,18 +2,112 @@
 
 一个专业的AI聊天机器人，支持对话、文件上传分析、网页内容分析和网络搜索功能。
 
-## 功能特性
+## 🚀 快速开始
+
+### 启动方式
+
+#### 推荐方式（一键启动）
+```bash
+# Linux/Mac
+./start.sh
+
+# Windows
+start.bat
+```
+
+#### 单独启动
+```bash
+# 仅启动前端
+./start-client.sh
+
+# 仅启动后端  
+./start-server.sh
+
+# 或手动启动
+cd client && npm start    # 前端 (端口 3000)
+cd server && python main.py  # 后端 (端口 3001)
+```
+
+### 配置环境变量
+
+1. 复制环境变量模板：
+```bash
+cp env.example .env
+```
+
+2. 编辑 `.env` 文件，添加API密钥：
+```env
+DASHSCOPE_API_KEY=your_dashscope_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+PORT=3001
+REACT_APP_API_URL=http://localhost:3001/api
+```
+
+### 访问应用
+
+- **前端界面**: http://localhost:3000
+- **后端API**: http://localhost:3001
+- **API文档**: http://localhost:3001/docs
+
+## ✨ 功能特性
 
 - 💬 **智能对话**: 基于通义千问模型的自然语言对话
 - 🔍 **网络搜索**: 集成Tavily搜索工具，实时获取最新信息
 - 📄 **文件分析**: 支持PDF、DOC、DOCX、TXT、MD文件上传和分析
 - 🌐 **网页分析**: 分析指定网页内容并回答问题
 - 📱 **响应式设计**: 现代化的UI设计，支持移动端
-- 📝 **Markdown支持**: 完整的Markdown渲染支持
+- 📝 **Markdown支持**: 完整的Markdown渲染和代码高亮
 - 📊 **对话历史**: 可管理的对话历史记录
-- 🎨 **专业界面**: 基于UX设计原则的专业界面
 
-## 技术栈
+## 🎯 使用指南
+
+### 界面布局
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [☰] AI Assistant                                    [U]     │
+├─────────────┬───────────────────────────────────────────────┤
+│ 侧边栏      │ 聊天区域                                        │
+│             │                                               │
+│ [New Chat]  │ 欢迎界面 / 对话消息                            │
+│             │                                               │
+│ 对话历史    │                                               │
+│ - 对话1     │                                               │
+│ - 对话2     │                                               │
+│             │ ┌─────────────────────────────────────────┐   │
+│             │ │ 输入框 [📎] [🔗] [发送]                  │   │
+│             │ └─────────────────────────────────────────┘   │
+└─────────────┴───────────────────────────────────────────────┘
+```
+
+### 基本对话
+- 在输入框中输入问题，按 `Enter` 发送
+- 按 `Shift + Enter` 换行
+- AI会基于通义千问模型回答
+
+### 文件上传分析
+1. 点击输入框右侧的 📎 图标
+2. 选择支持的文件：PDF、DOC、DOCX、TXT、MD
+3. 文件会被自动解析，AI基于文件内容回答
+4. 上传的文件会显示在输入框上方，可点击 ❌ 删除
+
+### 网页内容分析
+1. 点击输入框右侧的 🔗 图标
+2. 输入要分析的网页URL
+3. AI会分析网页内容并基于内容回答
+4. 分析的网页会显示在输入框上方，可点击 ❌ 删除
+
+### 网络搜索
+当问题包含搜索关键词时自动触发：
+- 英文：search、find、look up、what is、how to、where is
+- 中文：搜索、查找、寻找、什么是、如何、哪里、最新、新闻
+
+### 对话管理
+- 左侧显示所有对话历史
+- 点击"New Conversation"创建新对话
+- 点击对话项切换对话
+- 悬停显示删除按钮
+
+## 🛠️ 技术栈
 
 ### 前端
 - React 18 + TypeScript
@@ -23,149 +117,86 @@
 - React Syntax Highlighter (代码高亮)
 
 ### 后端
-- Node.js + Express
+- FastAPI (Python)
 - 通义千问 API
 - Tavily 搜索 API
-- Multer (文件上传)
-- Winston (日志系统)
-- Cheerio (网页解析)
-- Mammoth (Word文档解析)
-- PDF-Parse (PDF解析)
+- 文件处理 (PDF、Word、文本)
+- 网页内容抓取
+- 结构化日志
 
-## 快速开始
+## 📁 项目结构
 
-### 1. 安装依赖
+```
+general_chatbot/
+├── client/                 # React 前端应用
+│   ├── src/               # React 源代码
+│   ├── package.json       # 前端依赖管理
+│   └── start.sh/bat       # 前端启动脚本
+├── server/                # Python 后端服务
+│   ├── api/               # API 路由
+│   ├── services/          # 业务逻辑服务
+│   ├── utils/             # 工具函数
+│   ├── logs/              # 日志文件
+│   ├── requirements.txt   # Python 依赖
+│   ├── main.py            # 主程序入口 (FastAPI)
+│   └── start.sh/bat       # 后端启动脚本
+├── start.sh/bat           # 主启动脚本 (启动前后端)
+├── stop.sh/bat            # 主停止脚本
+├── env.example            # 环境变量模板
+└── README.md              # 项目说明
+```
 
+## 🔧 故障排除
+
+### PowerShell执行策略错误
+如果遇到 "无法加载文件 npm.ps1，因为在此系统上禁止运行脚本" 的错误：
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### 端口被占用
+如果3000或3001端口被占用：
+- 前端：在 `client/package.json` 中修改 `start` 脚本
+- 后端：在 `.env` 中修改 `PORT`
+
+### 依赖安装失败
 ```bash
-# 安装根目录依赖
+# 清除缓存重新安装
+npm cache clean --force
+rm -rf node_modules client/node_modules
 npm install
-
-# 安装前端依赖
-cd client
-npm install
-cd ..
-
-# 安装后端依赖（已在根目录安装）
+cd client && npm install
 ```
 
-### 2. 配置环境变量
+### API调用失败
+1. 检查 `.env` 文件中的API密钥
+2. 查看控制台错误信息
+3. 检查网络连接
 
-复制 `env.example` 到 `.env` 并填入你的API密钥：
+### 常见问题
 
-```bash
-cp env.example .env
-```
+1. **文件上传失败**
+   - 检查文件大小（限制10MB）
+   - 确认文件类型支持
+   - 检查网络连接
 
-编辑 `.env` 文件：
-```
-DASHSCOPE_API_KEY=your_dashscope_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here
-PORT=3001
-REACT_APP_API_URL=http://localhost:3001/api
-```
+2. **网页分析失败**
+   - 确认URL可访问
+   - 检查网页是否包含文本内容
+   - 某些网站可能有反爬虫保护
 
-### 3. 启动应用
+3. **AI回答异常**
+   - 检查API密钥配置
+   - 查看控制台错误信息
+   - 检查网络连接
 
-```bash
-# 同时启动前端和后端
-npm run dev
+## 📖 API文档
 
-# 或者分别启动
-npm run server  # 启动后端 (端口 3001)
-npm run client  # 启动前端 (端口 3000)
-```
+详细的API文档请参考：[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
 
-### 4. 访问应用
+项目结构说明请参考：[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)
 
-打开浏览器访问 `http://localhost:3000`
-
-## 使用说明
-
-### 基本对话
-直接在输入框中输入问题，按Enter发送，Shift+Enter换行。
-
-### 文件上传
-1. 点击输入框右侧的📎图标
-2. 选择支持的文件类型（PDF、DOC、DOCX、TXT、MD）
-3. 文件会被自动分析，AI将基于文件内容回答问题
-
-### 网页分析
-1. 点击输入框右侧的🔗图标
-2. 输入要分析的网页URL
-3. AI将分析网页内容并基于内容回答问题
-
-### 网络搜索
-当你的问题包含搜索关键词时，AI会自动使用Tavily进行网络搜索。
-
-### 对话管理
-- 左侧边栏显示所有对话历史
-- 点击"New Conversation"创建新对话
-- 点击对话项切换对话
-- 悬停对话项显示删除按钮
-
-## 项目结构
-
-```
-chatbot_test/
-├── client/                 # React前端
-│   ├── src/
-│   │   ├── components/     # React组件
-│   │   ├── services/       # API服务
-│   │   ├── types.ts        # TypeScript类型定义
-│   │   └── ...
-│   └── package.json
-├── server/                 # Node.js后端
-│   └── index.js           # Express服务器
-├── logs/                  # 日志文件
-├── uploads/               # 临时文件上传目录
-├── package.json           # 根目录依赖
-└── README.md
-```
-
-## API接口
-
-### POST /api/chat
-发送聊天消息
-```json
-{
-  "message": "用户消息",
-  "conversationId": "对话ID",
-  "attachments": [{"type": "file", "data": {...}}]
-}
-```
-
-### POST /api/upload
-上传文件
-- Content-Type: multipart/form-data
-- 支持文件类型: PDF, DOC, DOCX, TXT, MD
-
-### POST /api/analyze-url
-分析网页
-```json
-{
-  "url": "https://example.com"
-}
-```
-
-## 开发说明
-
-### 添加新功能
-1. 前端组件放在 `client/src/components/`
-2. API服务放在 `client/src/services/`
-3. 后端路由在 `server/index.js` 中添加
-
-### 日志系统
-使用Winston进行日志记录：
-- 错误日志: `logs/error.log`
-- 综合日志: `logs/combined.log`
-- 控制台输出: 开发环境
-
-### 错误处理
-- 前端: 组件级别的错误边界
-- 后端: 全局错误处理中间件
-- API: 统一的错误响应格式
-
-## 部署
+## 🚀 部署
 
 ### 生产环境构建
 ```bash
@@ -174,8 +205,8 @@ cd client
 npm run build
 
 # 启动生产服务器
-cd ..
-npm start
+cd server
+python main.py
 ```
 
 ### 环境变量
@@ -184,8 +215,6 @@ npm start
 - `TAVILY_API_KEY`: Tavily搜索API密钥
 - `PORT`: 服务器端口（默认3001）
 
-## 许可证
+## 📄 许可证
 
 MIT License
-
-

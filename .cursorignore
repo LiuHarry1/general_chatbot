@@ -1,0 +1,44 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyi
+
+# Node.js
+node_modules/
+client/node_modules/
+
+# Build outputs
+client/build/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Temporary uploads
+uploads/
+temp/
+temp_uploads/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+.nyc_output/
