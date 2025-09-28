@@ -3,7 +3,8 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import InputArea from './components/InputArea';
 import { ChatMessage, Conversation, Attachment } from './types';
-import { sendMessage } from './services/api';
+import { sendMessageStream } from './services/api';
+import { ConversationStorage } from './utils/conversationStorage';
 
 const App: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -12,18 +13,59 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [currentAttachments, setCurrentAttachments] = useState<Attachment[]>([]);
+  
+  // 生成或获取用户ID
+  const getUserId = (): string => {
+    let userId = localStorage.getItem('chatbot_user_id');
+    if (!userId) {
+      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('chatbot_user_id', userId);
+    }
+    return userId;
+  };
 
-  // Initialize with a default conversation
+  // Initialize conversations from localStorage
   useEffect(() => {
-    const defaultConversation: Conversation = {
-      id: '1',
-      title: 'New Conversation',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setConversations([defaultConversation]);
-    setCurrentConversationId('1');
+    const savedConversations = ConversationStorage.getConversations();
+    
+    if (savedConversations.length > 0) {
+      // 加载保存的对话
+      setConversations(savedConversations);
+      setCurrentConversationId(savedConversations[0].id);
+      
+      // 加载第一个对话的消息
+      const firstConversationMessages = ConversationStorage.getMessages(savedConversations[0].id);
+      setMessages(firstConversationMessages);
+    } else {
+      // 创建默认对话
+      const defaultConversation: Conversation = {
+        id: Date.now().toString(),
+        title: 'New Conversation',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      setConversations([defaultConversation]);
+      setCurrentConversationId(defaultConversation.id);
+      setMessages([]);
+      
+      // 保存默认对话
+      ConversationStorage.saveConversations([defaultConversation]);
+    }
   }, []);
+
+  // Save messages to localStorage when messages change
+  useEffect(() => {
+    if (currentConversationId && messages.length > 0) {
+      ConversationStorage.saveMessages(currentConversationId, messages);
+    }
+  }, [messages, currentConversationId]);
+
+  // Save conversations to localStorage when conversations change
+  useEffect(() => {
+    if (conversations.length > 0) {
+      ConversationStorage.saveConversations(conversations);
+    }
+  }, [conversations]);
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
     if (!content.trim() && (!attachments || attachments.length === 0)) return;
@@ -40,25 +82,68 @@ const App: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
+
+    // 创建AI消息的初始状态
+    const botMessageId = (Date.now() + 1).toString();
+    const botMessage: ChatMessage = {
+      id: botMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      intent: undefined,
+      sources: [],
+      isTyping: true  // 标记为正在输入状态
+    };
+
+    setMessages(prev => [...prev, botMessage]);
 
     try {
-      const response = await sendMessage({
-        message: content,
-        conversationId: currentConversationId || '1',
-        attachments: messageAttachments
-      });
-
-      const botMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date(),
-        intent: response.intent,
-        sources: response.sources
-      };
-
-      setMessages(prev => [...prev, botMessage]);
+      await sendMessageStream(
+        {
+          message: content,
+          conversationId: currentConversationId || '1',
+          attachments: messageAttachments,
+          user_id: getUserId()
+        },
+        // onChunk - 处理内容块
+        (chunk: string) => {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessageId 
+              ? { ...msg, content: msg.content + chunk, isTyping: false }
+              : msg
+          ));
+        },
+        // onMetadata - 处理元数据
+        (metadata) => {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessageId 
+              ? { 
+                  ...msg, 
+                  intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | undefined,
+                  sources: metadata.sources,
+                  timestamp: metadata.timestamp ? new Date(metadata.timestamp) : msg.timestamp,
+                  isTyping: false
+                }
+              : msg
+          ));
+        },
+        // onError - 处理错误
+        (error: string) => {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessageId 
+              ? { ...msg, content: `错误: ${error}`, isTyping: false }
+              : msg
+          ));
+        },
+        // onEnd - 流结束
+        () => {
+          setMessages(prev => prev.map(msg => 
+            msg.id === botMessageId 
+              ? { ...msg, isTyping: false }
+              : msg
+          ));
+        }
+      );
       
       // 更新对话标题（如果是第一条消息）
       if (messages.length === 0) {
@@ -71,15 +156,11 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '抱歉，我遇到了一个错误。请稍后重试。',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      setMessages(prev => prev.map(msg => 
+        msg.id === botMessageId 
+          ? { ...msg, content: '抱歉，我遇到了一个错误。请稍后重试。', isTyping: false }
+          : msg
+      ));
     }
   };
 
@@ -94,26 +175,35 @@ const App: React.FC = () => {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    setConversations(prev => [newConversation, ...prev]);
+    const updatedConversations = [newConversation, ...conversations];
+    setConversations(updatedConversations);
     setCurrentConversationId(newConversation.id);
     setMessages([]);
     setCurrentAttachments([]); // 新对话时清空附件
+    
+    // 保存新对话到localStorage
+    ConversationStorage.saveConversations(updatedConversations);
   };
 
   const handleSelectConversation = (conversationId: string) => {
     setCurrentConversationId(conversationId);
-    // In a real app, you would load messages for this conversation
-    setMessages([]);
+    // 加载对应对话的消息
+    const conversationMessages = ConversationStorage.getMessages(conversationId);
+    setMessages(conversationMessages);
     setCurrentAttachments([]); // 切换对话时清空附件
   };
 
   const handleDeleteConversation = (conversationId: string) => {
+    // 从localStorage删除对话及其消息
+    ConversationStorage.deleteConversation(conversationId);
+    
     setConversations(prev => prev.filter(conv => conv.id !== conversationId));
     if (currentConversationId === conversationId) {
       const remaining = conversations.filter(conv => conv.id !== conversationId);
       if (remaining.length > 0) {
         setCurrentConversationId(remaining[0].id);
-        setMessages([]);
+        const messages = ConversationStorage.getMessages(remaining[0].id);
+        setMessages(messages);
       } else {
         handleNewConversation();
       }

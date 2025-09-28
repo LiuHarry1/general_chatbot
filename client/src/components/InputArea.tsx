@@ -38,6 +38,8 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     setIsUploading(true);
     try {
       const fileArray = Array.from(files);
+      const newAttachments: Attachment[] = [];
+      
       for (const file of fileArray) {
         const response = await uploadFile(file);
         const newAttachment: Attachment = {
@@ -50,9 +52,12 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
             content: response.content
           }
         };
-        const updatedAttachments = [...attachments, newAttachment];
-        onAttachmentsChange?.(updatedAttachments);
+        newAttachments.push(newAttachment);
       }
+      
+      // 一次性更新所有新附件
+      const updatedAttachments = [...attachments, ...newAttachments];
+      onAttachmentsChange?.(updatedAttachments);
     } catch (error) {
       console.error('Error uploading file:', error);
       alert('文件上传失败，请重试。');
@@ -103,15 +108,38 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
 
-  const getSuggestedActions = (attachment: Attachment) => {
-    if (attachment.type === 'file') {
+  const getSuggestedActions = (attachments: Attachment[]) => {
+    const hasFiles = attachments.some(att => att.type === 'file');
+    const hasUrls = attachments.some(att => att.type === 'url');
+    const fileCount = attachments.filter(att => att.type === 'file').length;
+    
+    if (hasFiles && hasUrls) {
+      // 混合类型：文件和网页
       return [
-        "详细总结这篇文档内容",
-        "用通俗易懂的话，说说文档讲了什么",
-        "生成脑图",
-        "生成播客"
+        "综合分析所有内容",
+        "对比这些文档和网页的异同",
+        "总结所有材料的主要观点",
+        "生成综合报告"
       ];
-    } else {
+    } else if (hasFiles) {
+      // 只有文件
+      if (fileCount > 1) {
+        return [
+          "对比分析这些文档",
+          "总结所有文档的共同点",
+          "生成综合分析报告",
+          "找出文档间的关联性"
+        ];
+      } else {
+        return [
+          "详细总结这篇文档内容",
+          "用通俗易懂的话，说说文档讲了什么",
+          "生成脑图",
+          "生成播客"
+        ];
+      }
+    } else if (hasUrls) {
+      // 只有网页
       return [
         "详细总结这个网页内容",
         "用通俗易懂的话，说说网页讲了什么",
@@ -119,6 +147,8 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
         "生成播客"
       ];
     }
+    
+    return [];
   };
 
   const handleSuggestedAction = (action: string) => {
@@ -157,10 +187,10 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
       {/* 上部分：附件显示区域 */}
       {attachments.length > 0 && (
         <div className="mb-4 space-y-3">
-          {attachments.map((attachment, index) => (
-            <div key={index} className="space-y-3">
-              {/* 附件卡片 */}
-              <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 shadow-sm">
+          {/* 附件列表 */}
+          <div className="space-y-2">
+            {attachments.map((attachment, index) => (
+              <div key={index} className="bg-gray-50 rounded-xl border border-gray-200 p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-3 flex-1">
                     {attachment.type === 'file' ? (
@@ -195,24 +225,24 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
                   </button>
                 </div>
               </div>
+            ))}
+          </div>
 
-              {/* 建议操作按钮 */}
-              <div className="grid grid-cols-2 gap-2">
-                {getSuggestedActions(attachment).map((action, actionIndex) => (
-                  <button
-                    key={actionIndex}
-                    onClick={() => handleSuggestedAction(action)}
-                    className="bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 flex items-center justify-between group transition-colors"
-                  >
-                    <span className="truncate">{action}</span>
-                    <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+          {/* 建议操作按钮 - 只在有附件时显示一次 */}
+          <div className="grid grid-cols-2 gap-2">
+            {getSuggestedActions(attachments).map((action, actionIndex) => (
+              <button
+                key={actionIndex}
+                onClick={() => handleSuggestedAction(action)}
+                className="bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 flex items-center justify-between group transition-colors"
+              >
+                <span className="truncate">{action}</span>
+                <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -226,7 +256,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="上传文件"
+              title="上传文件（支持多选）"
             >
               <Paperclip className="w-5 h-5 text-gray-600" />
             </button>

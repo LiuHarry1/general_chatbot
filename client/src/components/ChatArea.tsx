@@ -70,7 +70,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, isLoading }) => {
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
-            {isLoading && <TypingIndicator />}
           </div>
         )}
         <div ref={messagesEndRef} />

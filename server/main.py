@@ -14,13 +14,31 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 # 导入配置和路由
 from config import settings
-from api.routes import router
+from api import router
 from utils.logger import app_logger
 from models import ErrorResponse
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动事件
+    app_logger.info("AI聊天机器人API启动中...")
+    app_logger.info(f"服务配置: {settings.host}:{settings.port}")
+    app_logger.info(f"调试模式: {settings.debug}")
+    app_logger.info("API文档地址: http://localhost:3001/docs")
+    app_logger.info("AI聊天机器人API启动完成")
+    
+    yield
+    
+    # 关闭事件
+    app_logger.info("AI聊天机器人API正在关闭...")
+    app_logger.info("AI聊天机器人API已关闭")
 
 
 def create_app() -> FastAPI:
@@ -32,7 +50,8 @@ def create_app() -> FastAPI:
         description="基于通义千问和Tavily搜索的AI聊天机器人API",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc"
+        redoc_url="/redoc",
+        lifespan=lifespan
     )
     
     # 配置CORS
@@ -65,7 +84,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         """通用异常处理"""
-        app_logger.error(f"未处理的异常: {exc}")
+        app_logger.error(f"未处理的异常: {exc}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content=ErrorResponse(
@@ -75,22 +94,6 @@ def create_app() -> FastAPI:
             ).dict()
         )
     
-    # 启动事件
-    @app.on_event("startup")
-    async def startup_event():
-        """应用启动事件"""
-        app_logger.info("AI聊天机器人API启动中...")
-        app_logger.info(f"服务配置: {settings.host}:{settings.port}")
-        app_logger.info(f"调试模式: {settings.debug}")
-        app_logger.info("API文档地址: http://localhost:3001/docs")
-        app_logger.info("AI聊天机器人API启动完成")
-    
-    # 关闭事件
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """应用关闭事件"""
-        app_logger.info("AI聊天机器人API正在关闭...")
-        app_logger.info("AI聊天机器人API已关闭")
     
     return app
 

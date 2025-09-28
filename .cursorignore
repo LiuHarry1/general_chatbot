@@ -14,8 +14,6 @@ client/build/
 dist/
 
 # Logs
-*.log
-logs/
 
 # Environment files
 .env

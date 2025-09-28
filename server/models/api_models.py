@@ -1,10 +1,9 @@
 """
-数据模型定义
-包含所有API请求和响应的Pydantic模型
+API请求和响应模型
+用于FastAPI端点的数据验证和序列化
 """
 from pydantic import BaseModel, HttpUrl, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime
 
 
 class AttachmentData(BaseModel):
@@ -38,6 +37,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000, description="用户消息")
     conversationId: str = Field(..., description="对话ID")
     attachments: Optional[List[Attachment]] = Field(default=[], description="附件列表")
+    user_id: Optional[str] = Field(default="default_user", description="用户ID")
 
 
 class ChatResponse(BaseModel):
@@ -115,5 +115,3 @@ class ApiResponse(BaseModel):
     data: Optional[Any] = Field(None, description="响应数据")
     message: Optional[str] = Field(None, description="响应消息")
     timestamp: str = Field(..., description="响应时间")
-
-

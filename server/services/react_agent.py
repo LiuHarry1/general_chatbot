@@ -202,14 +202,22 @@ class ReactAgent:
             elif action.type == ActionType.ANALYZE_FILE:
                 app_logger.info("执行文件分析行动")
                 file_contents = []
+                file_names = []
                 for attachment in action.parameters['attachments']:
                     if 'data' in attachment and 'content' in attachment['data']:
-                        file_contents.append(attachment['data']['content'])
+                        file_name = attachment['data'].get('name', '未知文件')
+                        file_content = attachment['data']['content']
+                        file_names.append(file_name)
+                        # 为每个文件添加标识
+                        file_contents.append(f"=== 文件: {file_name} ===\n{file_content}")
+                
+                combined_content = "\n\n".join(file_contents)
+                app_logger.info(f"分析了 {len(file_contents)} 个文件: {', '.join(file_names)}")
                 
                 return Observation(
-                    content="\n\n".join(file_contents),
+                    content=combined_content,
                     source="file_analysis",
-                    metadata={"file_count": len(file_contents)}
+                    metadata={"file_count": len(file_contents), "file_names": file_names}
                 )
             
             elif action.type == ActionType.ANALYZE_URL:
@@ -262,7 +270,7 @@ class ReactAgent:
         
         return True
     
-    async def process_query(self, user_message: str, attachments: List[Dict] = None) -> Tuple[str, str, Optional[Dict]]:
+    async def process_query(self, user_message: str, attachments: List[Dict] = None, user_id: str = "default_user") -> Tuple[str, str, Optional[Dict]]:
         """
         处理用户查询的主方法
         返回: (intent, content, search_results)

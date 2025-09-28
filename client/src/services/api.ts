@@ -18,6 +18,76 @@ export const sendMessage = async (request: SendMessageRequest): Promise<ApiRespo
   return response.json();
 };
 
+export const sendMessageStream = async (
+  request: SendMessageRequest,
+  onChunk: (chunk: string) => void,
+  onMetadata: (metadata: { intent?: string; sources?: string[]; timestamp?: string }) => void,
+  onError: (error: string) => void,
+  onEnd: () => void
+): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('Response body is not readable');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            switch (data.type) {
+              case 'metadata':
+                onMetadata({
+                  intent: data.intent,
+                  sources: data.sources,
+                  timestamp: data.timestamp
+                });
+                break;
+              case 'content':
+                onChunk(data.content);
+                break;
+              case 'end':
+                onEnd();
+                return;
+              case 'error':
+                onError(data.error);
+                return;
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
 export const uploadFile = async (file: File): Promise<{ content: string }> => {
   const formData = new FormData();
   formData.append('file', file);

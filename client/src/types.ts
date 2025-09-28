@@ -57,4 +57,5 @@ export interface SendMessageRequest {
   message: string;
   conversationId: string;
   attachments?: Attachment[];
+  user_id?: string;
 }
