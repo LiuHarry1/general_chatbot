@@ -21,7 +21,6 @@ from services.react_agent import react_agent
 from services.simple_chat_service import simple_chat_service
 from utils.logger import app_logger
 from config import settings
-from database.api.database_routes import router as database_router
 
 
 # 创建路由器
@@ -209,4 +208,3 @@ async def get_supported_formats():
 
 
 # 包含数据库路由
-router.include_router(database_router, prefix="/db", tags=["database"])

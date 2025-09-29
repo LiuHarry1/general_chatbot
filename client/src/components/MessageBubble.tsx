@@ -79,7 +79,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ) : (
               <>
                 {message.content ? (
-                  <div className="inline">
+                  <>
                     <ReactMarkdown
                       components={{
                         code({ className, children, ...props }: any) {
@@ -105,15 +105,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                       {message.content}
                     </ReactMarkdown>
                     {message.isTyping && (
-                      <span className="inline-block ml-1 align-middle">
+                      <div className="inline-flex items-center mt-2">
                         <span className="inline-typing-indicator">
                           <span className="typing-dot" style={{ animationDelay: '0ms' }}></span>
                           <span className="typing-dot" style={{ animationDelay: '150ms' }}></span>
                           <span className="typing-dot" style={{ animationDelay: '300ms' }}></span>
                         </span>
-                      </span>
+                      </div>
                     )}
-                  </div>
+                  </>
                 ) : (
                   message.isTyping ? (
                     <div className="inline-flex items-center">

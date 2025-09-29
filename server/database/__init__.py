@@ -6,7 +6,6 @@
 from .connection import DatabaseManager
 from .repositories.conversation_repository import ConversationRepository
 from .repositories.message_repository import MessageRepository
-from .api.database_routes import router as database_router
 
 # 全局数据库实例
 db_manager = DatabaseManager()
@@ -17,7 +16,6 @@ __all__ = [
     'DatabaseManager',
     'ConversationRepository', 
     'MessageRepository',
-    'database_router',
     'db_manager',
     'conversation_repo',
     'message_repo'

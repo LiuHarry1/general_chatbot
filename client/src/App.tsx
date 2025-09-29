@@ -32,6 +32,9 @@ const App: React.FC = () => {
     // 使用传入的附件或当前持久化的附件
     const messageAttachments = attachments || currentAttachments;
 
+    // 保存添加用户消息前的消息数量，用于判断是否需要更新对话标题
+    const messagesBeforeUserMessage = messages;
+
     // 添加用户消息到数据库
     const userMessage = await addMessage({
       role: 'user',
@@ -100,7 +103,8 @@ const App: React.FC = () => {
       );
       
       // 更新对话标题（如果是第一条消息）
-      if (messages.length === 0 && currentConversationId) {
+      // 注意：这里检查的是添加用户消息前的消息数量
+      if (messagesBeforeUserMessage.length === 0 && currentConversationId) {
         const conversationTitle = content.length > 30 ? content.substring(0, 30) + '...' : content;
         try {
           await updateConversation(currentConversationId, conversationTitle);

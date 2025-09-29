@@ -7,36 +7,33 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from ..repositories.conversation_repository import ConversationRepository
-from ..repositories.message_repository import MessageRepository
-from ..connection import DatabaseManager
+from database.repositories.conversation_repository import ConversationRepository
+from database.repositories.message_repository import MessageRepository
+from database.connection import DatabaseManager
 from models import (
     ConversationCreate, ConversationResponse,
     MessageCreate, MessageResponse, MessageUpdate
 )
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent))
 from utils.logger import app_logger
 
-# 创建数据库实例
+# 创建路由器
+router = APIRouter(prefix="/db", tags=["数据库"])
+
+# 初始化数据库管理器
 db_manager = DatabaseManager()
 conversation_repo = ConversationRepository(db_manager)
 message_repo = MessageRepository(db_manager)
 
-# 创建路由器
-router = APIRouter()
-
-# 对话相关API
+# 对话相关路由
 @router.post("/conversations", response_model=ConversationResponse)
-async def create_conversation(conversation: ConversationCreate):
+async def create_conversation(request: ConversationCreate):
     """创建新对话"""
     try:
-        app_logger.info(f"创建对话: {conversation.title}")
+        app_logger.info(f"创建对话: {request.title}")
         
         conversation_id = conversation_repo.create_conversation(
-            title=conversation.title,
-            user_id=conversation.user_id
+            title=request.title,
+            user_id=request.user_id
         )
         
         # 获取创建的对话信息
@@ -47,7 +44,7 @@ async def create_conversation(conversation: ConversationCreate):
         return ConversationResponse(**created_conversation)
         
     except Exception as e:
-        app_logger.error(f"创建对话失败: {e}")
+        app_logger.error("创建对话失败: {}", e)
         raise HTTPException(status_code=500, detail="创建对话失败")
 
 @router.get("/conversations", response_model=List[ConversationResponse])
@@ -60,7 +57,7 @@ async def get_conversations(user_id: str = Query(default="default_user")):
         return [ConversationResponse(**conv) for conv in conversations]
         
     except Exception as e:
-        app_logger.error(f"获取对话列表失败: {e}")
+        app_logger.error("获取对话列表失败: {}", e)
         raise HTTPException(status_code=500, detail="获取对话列表失败")
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
@@ -78,30 +75,30 @@ async def get_conversation(conversation_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        app_logger.error(f"获取对话失败: {e}")
+        app_logger.error("获取对话失败: {}", e)
         raise HTTPException(status_code=500, detail="获取对话失败")
 
 @router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
-async def update_conversation(conversation_id: str, title: str = Query(...)):
+async def update_conversation(conversation_id: str, request: ConversationCreate):
     """更新对话标题"""
     try:
-        app_logger.info(f"更新对话: {conversation_id}, 标题: {title}")
+        app_logger.info(f"更新对话: {conversation_id}, 标题: {request.title}")
         
-        success = conversation_repo.update_conversation(conversation_id, title)
+        success = conversation_repo.update_conversation(conversation_id, request.title)
         if not success:
             raise HTTPException(status_code=404, detail="对话不存在")
         
         # 获取更新后的对话信息
         updated_conversation = conversation_repo.get_conversation(conversation_id)
         if not updated_conversation:
-            raise HTTPException(status_code=404, detail="对话不存在")
+            raise HTTPException(status_code=500, detail="获取更新后的对话失败")
         
         return ConversationResponse(**updated_conversation)
         
     except HTTPException:
         raise
     except Exception as e:
-        app_logger.error(f"更新对话失败: {e}")
+        app_logger.error("更新对话失败: {}", e)
         raise HTTPException(status_code=500, detail="更新对话失败")
 
 @router.delete("/conversations/{conversation_id}")
@@ -119,10 +116,10 @@ async def delete_conversation(conversation_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        app_logger.error(f"删除对话失败: {e}")
+        app_logger.error("删除对话失败: {}", e)
         raise HTTPException(status_code=500, detail="删除对话失败")
 
-# 消息相关API
+# 消息相关路由
 @router.post("/messages", response_model=MessageResponse)
 async def create_message(message: MessageCreate):
     """创建新消息"""
@@ -150,7 +147,7 @@ async def create_message(message: MessageCreate):
         return MessageResponse(**created_message)
         
     except Exception as e:
-        app_logger.error(f"创建消息失败: {e}")
+        app_logger.error("创建消息失败: {}", e)
         raise HTTPException(status_code=500, detail="创建消息失败")
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
@@ -166,7 +163,7 @@ async def get_messages(conversation_id: str):
         return [MessageResponse(**msg) for msg in messages]
         
     except Exception as e:
-        app_logger.error(f"获取消息失败: {e}")
+        app_logger.error("获取消息失败: {}", e)
         raise HTTPException(status_code=500, detail="获取消息失败")
 
 @router.put("/messages/{message_id}", response_model=MessageResponse)
@@ -196,14 +193,18 @@ async def update_message(message_id: str, message_update: MessageUpdate):
             raise HTTPException(status_code=404, detail="消息不存在")
         
         # 获取更新后的消息信息
-        # 这里需要从消息中找到对应的conversation_id
-        # 简化处理，直接返回更新成功
-        return {"message": "消息更新成功"}
+        updated_message = message_repo.get_message(message_id)
+        if not updated_message:
+            raise HTTPException(status_code=500, detail="获取更新后的消息失败")
+        
+        # 映射字段名
+        updated_message['timestamp'] = updated_message['created_at']
+        return MessageResponse(**updated_message)
         
     except HTTPException:
         raise
     except Exception as e:
-        app_logger.error(f"更新消息失败: {e}")
+        app_logger.error("更新消息失败: {}", e)
         raise HTTPException(status_code=500, detail="更新消息失败")
 
 @router.delete("/messages/{message_id}")
@@ -221,5 +222,5 @@ async def delete_message(message_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        app_logger.error(f"删除消息失败: {e}")
+        app_logger.error("删除消息失败: {}", e)
         raise HTTPException(status_code=500, detail="删除消息失败")
