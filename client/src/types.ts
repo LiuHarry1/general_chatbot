@@ -4,7 +4,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   attachments?: Attachment[];
-  intent?: 'normal' | 'web' | 'file' | 'search';
+  intent?: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
   isTyping?: boolean;
 }
@@ -42,7 +42,7 @@ export interface Conversation {
 
 export interface ApiResponse {
   content: string;
-  intent: 'normal' | 'web' | 'file' | 'search';
+  intent: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
   timestamp?: string;
 }

@@ -31,7 +31,13 @@ export class DatabaseStorage {
   /**
    * 解析日期字符串
    */
-  private static parseDate(dateString: string): Date {
+  private static parseDate(dateString: string | undefined): Date {
+    // 处理undefined或null值
+    if (!dateString) {
+      // 静默处理，不输出警告，因为这是正常情况
+      return new Date(); // 返回当前时间作为fallback
+    }
+    
     try {
       // 尝试解析ISO格式日期
       const date = new Date(dateString);

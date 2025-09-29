@@ -12,12 +12,13 @@ class Settings(BaseSettings):
     
     # API密钥配置
     dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "sk-f256c03643e9491fb1ebc278dd958c2d")
-    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "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")
     
     # 服务器配置
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "3001"))
     debug: bool = os.getenv("DEBUG", "true").lower() == "true"
+    react_app_api_url: str = os.getenv("REACT_APP_API_URL", "http://localhost:3001/api")
     
     # 文件上传配置
     max_file_size: int = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))  # 10MB
@@ -71,7 +72,7 @@ class Settings(BaseSettings):
     message_ttl: int = int(os.getenv("MESSAGE_TTL", str(3600 * 12)))  # 12小时
     
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
         case_sensitive = False
 
 

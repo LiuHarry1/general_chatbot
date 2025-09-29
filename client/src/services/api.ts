@@ -16,7 +16,7 @@ interface MessageApiResponse {
   conversation_id: string;
   role: 'user' | 'assistant';
   content: string;
-  intent?: 'normal' | 'web' | 'file' | 'search';
+  intent?: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
   attachments?: any[];
   is_typing: boolean;
@@ -46,9 +46,10 @@ export const sendMessageStream = async (
   onChunk: (chunk: string) => void,
   onMetadata: (metadata: { intent?: string; sources?: string[]; timestamp?: string }) => void,
   onError: (error: string) => void,
-  onEnd: () => void
+  onEnd: () => void,
+  onImage?: (image: { url: string; filename: string }) => void
 ): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+  const response = await fetch(`${API_BASE_URL}/v1/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -92,6 +93,14 @@ export const sendMessageStream = async (
                 break;
               case 'content':
                 onChunk(data.content);
+                break;
+              case 'image':
+                if (onImage) {
+                  onImage({
+                    url: data.url,
+                    filename: data.filename
+                  });
+                }
                 break;
               case 'end':
                 onEnd();

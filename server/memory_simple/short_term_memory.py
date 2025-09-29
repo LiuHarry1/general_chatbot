@@ -165,6 +165,10 @@ class ShortTermMemoryManager:
             return conversations[-limit:]
         return conversations
 
+    def get_recent_conversations(self, user_id: str, limit: int = 3) -> List[Dict[str, Any]]:
+        """获取最近的对话记录"""
+        return self.get_conversation_history(user_id, limit=limit)
+
     def clear_conversations(self, user_id: str):
         """清空用户对话历史"""
         if user_id in self.conversations:

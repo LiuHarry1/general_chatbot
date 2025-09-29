@@ -76,7 +76,7 @@ const App: React.FC = () => {
         (metadata) => {
           if (botMessage) {
             updateMessage(botMessage.id, {
-              intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | undefined,
+              intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
               sources: metadata.sources,
               isTyping: true // 保持loading状态，直到流式输出结束
             }, false); // 不保存到数据库，只更新本地状态
@@ -98,6 +98,28 @@ const App: React.FC = () => {
               content: accumulatedContent,
               isTyping: false 
             }, true); // 结束时保存到数据库
+          }
+        },
+        // onImage - 处理图片
+        (image: { url: string; filename: string }) => {
+          if (botMessage) {
+            // 确保图片URL是完整的URL，使用API服务器的地址
+            let fullImageUrl;
+            if (image.url.startsWith('http')) {
+              fullImageUrl = image.url;
+            } else {
+              // 使用API服务器的地址而不是前端地址
+              const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+              const apiServerUrl = apiBaseUrl.replace('/api', ''); // 移除/api后缀
+              fullImageUrl = `${apiServerUrl}${image.url}`;
+            }
+            // 将图片添加到消息内容中
+            const imageMarkdown = `\n\n![${image.filename}](${fullImageUrl})`;
+            accumulatedContent += imageMarkdown;
+            updateMessage(botMessage.id, { 
+              content: accumulatedContent,
+              isTyping: true // 继续loading，等待更多内容
+            }, false); // 不保存到数据库，只更新本地状态
           }
         }
       );

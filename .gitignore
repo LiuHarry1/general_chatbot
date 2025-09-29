@@ -13,6 +13,7 @@ dist/
 .env.test.local
 .env.production.local
 
+server/images/
 server/chatbot.db
 # Logs
 logs/

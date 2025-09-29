@@ -20,6 +20,8 @@ class AIService:
         self.base_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
         self.model = settings.qwen_model
         self.timeout = 60.0
+        
+        app_logger.info(f"AI服务初始化 - API密钥: {repr(self.api_key[:20])}..., 模型: {self.model}")
     
     def build_system_prompt(self, intent: str, file_content: Optional[str] = None, 
                           web_content: Optional[str] = None, search_results: Optional[Dict] = None,
@@ -99,6 +101,25 @@ class AIService:
                 "6. 请确保回答内容积极正面，符合社会价值观"
             )
             system_prompt += f"\n\n搜索结果：\n{json.dumps(search_results, ensure_ascii=False, indent=2)}"
+        
+        elif intent == "code":
+            system_prompt = (
+                "你是一个专业的Python编程助手，擅长数据分析和可视化。用户的代码将被自动执行并生成图片。\n"
+                "要求：\n"
+                "1. 用中文回答\n"
+                "2. 生成可执行的Python代码\n"
+                "3. 如果用户要求画图，使用matplotlib等库生成图表\n"
+                "4. 代码要完整、可运行\n"
+                "5. 对代码进行必要的注释说明\n"
+                "6. 如果涉及数据处理，使用pandas、numpy等库\n"
+                "7. 生成的图表要美观、清晰，使用save_plot()函数保存图片\n"
+                "8. 请确保代码安全，不执行危险操作\n"
+                "9. 请确保回答内容积极正面，符合社会价值观\n\n"
+                "重要提示：\n"
+                "- 使用save_plot(filename)函数保存图片，不需要plt.show()\n"
+                "- 系统会自动执行你的代码并显示生成的图片\n"
+                "- 图片将自动保存并显示在聊天界面中"
+            )
         
         else:
             system_prompt = base_prompt

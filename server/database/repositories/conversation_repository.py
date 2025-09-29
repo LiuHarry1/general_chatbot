@@ -38,8 +38,8 @@ class ConversationRepository:
                 c.title, 
                 c.created_at, 
                 c.updated_at,
-                m.content as last_message,
-                m.created_at as last_message_time,
+                COALESCE(m.content, '') as last_message,
+                COALESCE(m.created_at, c.created_at) as last_message_time,
                 COUNT(m.id) as message_count
             FROM conversations c
             LEFT JOIN messages m ON c.id = m.conversation_id

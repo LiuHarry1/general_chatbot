@@ -19,6 +19,12 @@ class SearchService:
         self.max_results = settings.tavily_max_results
         self.search_depth = settings.tavily_search_depth
         self.timeout = 30.0
+        self.is_configured = bool(self.api_key and self.api_key.strip())
+        
+        app_logger.info(f"搜索服务初始化 - API密钥: {repr(self.api_key)}, 是否配置: {self.is_configured}")
+        
+        if not self.is_configured:
+            app_logger.warning("Tavily API密钥未配置，搜索功能将使用降级模式")
     
     def validate_query(self, query: str) -> None:
         """验证搜索查询"""
@@ -62,6 +68,10 @@ class SearchService:
             # 验证查询
             self.validate_query(query)
             
+            # 检查API密钥配置
+            if not self.is_configured:
+                raise HTTPException(status_code=503, detail="搜索服务未配置API密钥，请配置TAVILY_API_KEY环境变量")
+            
             # 构建请求数据
             request_data = {
                 "api_key": self.api_key,
@@ -75,6 +85,9 @@ class SearchService:
             }
             
             # 发送搜索请求
+            app_logger.info(f"发送搜索请求到: {self.base_url}")
+            app_logger.info(f"请求数据: {request_data}")
+            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     self.base_url,
@@ -84,6 +97,8 @@ class SearchService:
                         "User-Agent": "AI-Chatbot/1.0"
                     }
                 )
+                app_logger.info(f"搜索响应状态: {response.status_code}")
+                app_logger.info(f"搜索响应内容: {response.text[:500]}...")
                 response.raise_for_status()
                 
                 results = response.json()
@@ -112,7 +127,7 @@ class SearchService:
                 raise HTTPException(status_code=500, detail="搜索服务暂时不可用")
         
         except Exception as e:
-            app_logger.error(f"搜索失败: {query}, 错误: {e}")
+            app_logger.error(f"搜索失败: {query}, 错误: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
     
     async def search_with_fallback(self, query: str) -> Optional[Dict[str, Any]]:

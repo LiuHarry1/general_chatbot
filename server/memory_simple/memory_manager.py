@@ -71,7 +71,8 @@ class MemoryManager:
                 logger.error("Failed to generate embedding for conversation summary.")
                 return ""
             
-            document_id = f"summary_{conversation_id}_{datetime.now().isoformat()}"
+            import uuid
+            document_id = str(uuid.uuid4())
             success = await self.vector_store.add_document(
                 document_id=document_id,
                 content=summary,
@@ -216,6 +217,49 @@ class MemoryManager:
     async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
         """获取用户的完整档案"""
         return await self.get_user_identity(user_id)
+
+    async def add_memory(self, user_id: str, memory_text: str, metadata: Dict[str, Any] = None) -> bool:
+        """添加记忆到长期存储"""
+        try:
+            # 生成摘要
+            summary_prompt = f"请为以下对话内容生成一个简洁的摘要（不超过100字）：\n\n{memory_text}"
+            summary = await self._call_llm(summary_prompt, temperature=0.3)
+            if not summary or summary.startswith("LLM"):
+                summary = memory_text[:100] + "..."
+            
+            # 存储到向量数据库
+            conversation_id = metadata.get("conversation_id", "default") if metadata else "default"
+            success = await self.store_conversation_summary(
+                conversation_id=conversation_id,
+                summary=summary,
+                metadata={"user_id": user_id, **(metadata or {})}
+            )
+            
+            if success:
+                logger.info(f"Memory added for user {user_id}: {summary[:50]}...")
+            return bool(success)
+        except Exception as e:
+            logger.error(f"Error adding memory: {e}")
+            return False
+
+    async def get_user_memories(self, user_id: str, limit: int = 10) -> List[str]:
+        """获取用户的记忆列表"""
+        try:
+            # 使用用户ID作为查询来搜索相关记忆
+            query = f"用户 {user_id} 的对话历史"
+            memories = await self.search_relevant_context(query, user_id, limit=limit)
+            
+            # 提取记忆文本
+            memory_texts = []
+            for memory in memories:
+                if memory.get("content"):
+                    memory_texts.append(memory["content"])
+            
+            logger.info(f"Retrieved {len(memory_texts)} memories for user {user_id}")
+            return memory_texts
+        except Exception as e:
+            logger.error(f"Error getting user memories: {e}")
+            return []
 
     async def build_contextual_prompt(self, user_id: str, current_message: str) -> str:
         """根据用户档案和当前消息构建个性化的上下文提示词"""
