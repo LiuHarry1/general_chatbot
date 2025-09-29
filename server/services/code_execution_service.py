@@ -50,8 +50,12 @@ class CodeExecutionService:
             app_logger.info(f"开始执行代码，用户: {user_id}")
             app_logger.debug(f"执行代码内容: {code[:200]}...")
             
-            # 创建临时文件
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            # 确保代码是字符串类型且使用UTF-8编码
+            if not isinstance(code, str):
+                code = str(code)
+            
+            # 创建临时文件，确保使用UTF-8编码
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
                 f.write(code)
                 temp_file = f.name
             
@@ -89,33 +93,43 @@ class CodeExecutionService:
         # 修改代码以支持图片保存
         modified_code = self._prepare_code_for_execution(code_file, output_dir)
         
-        # 写入修改后的代码
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        # 写入修改后的代码，确保使用UTF-8编码
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write(modified_code)
             modified_file = f.name
         
         try:
-            # 执行代码
-            process = await asyncio.create_subprocess_exec(
-                sys.executable, modified_file,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-                cwd=os.path.dirname(modified_file)
-            )
+            # 使用线程池执行器来避免Windows上的asyncio subprocess问题
+            import concurrent.futures
             
-            stdout, stderr = await process.communicate()
+            def run_python_code():
+                """在子进程中运行Python代码"""
+                result = subprocess.run(
+                    [sys.executable, modified_file],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    cwd=os.path.dirname(modified_file),
+                    encoding='utf-8',
+                    errors='ignore'
+                )
+                return result
+            
+            # 在线程池中执行
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                result = await loop.run_in_executor(executor, run_python_code)
             
             # 解码输出
-            output = stdout.decode('utf-8', errors='ignore')
-            error_output = stderr.decode('utf-8', errors='ignore')
+            output = result.stdout
+            error_output = result.stderr
             
             # 收集生成的图片
             images = self._collect_generated_images(output_dir)
             
-            success = process.returncode == 0
+            success = result.returncode == 0
             
-            result = {
+            execution_result = {
                 "success": success,
                 "output": output,
                 "error": error_output if not success else "",
@@ -128,7 +142,7 @@ class CodeExecutionService:
             else:
                 app_logger.error(f"代码执行失败: {error_output}")
                 
-            return result
+            return execution_result
             
         finally:
             # 清理临时文件
@@ -138,8 +152,24 @@ class CodeExecutionService:
     def _prepare_code_for_execution(self, code_file: str, output_dir: str) -> str:
         """准备代码执行环境"""
         
-        with open(code_file, 'r', encoding='utf-8') as f:
-            original_code = f.read()
+        # 尝试多种编码方式读取文件
+        encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+        original_code = None
+        
+        for encoding in encodings:
+            try:
+                with open(code_file, 'r', encoding=encoding) as f:
+                    original_code = f.read()
+                app_logger.debug(f"成功使用 {encoding} 编码读取文件")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if original_code is None:
+            # 如果所有编码都失败，使用错误处理方式读取
+            with open(code_file, 'r', encoding='utf-8', errors='replace') as f:
+                original_code = f.read()
+            app_logger.warning("使用错误处理方式读取文件，可能包含替换字符")
         
         # 添加必要的导入和设置
         prepend_code = f"""
@@ -155,9 +185,12 @@ import pandas as pd
 OUTPUT_DIR = r"{output_dir}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# 设置matplotlib中文字体
+# 设置matplotlib中文字体和图片质量
 plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
+# 设置默认图片尺寸和质量 - 进一步优化
+plt.rcParams['figure.figsize'] = [6, 4]  # 更小的默认图片尺寸
+plt.rcParams['figure.dpi'] = 80  # 进一步降低DPI
 
 # 图片计数器
 _image_counter = 0
@@ -169,7 +202,10 @@ def save_plot(filename=None):
         filename = f"plot_{{_image_counter}}.png"
         _image_counter += 1
     filepath = os.path.join(OUTPUT_DIR, filename)
-    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    # 使用更低的DPI和压缩设置来进一步减小文件大小
+    plt.savefig(filepath, dpi=100, bbox_inches='tight', 
+                facecolor='white', edgecolor='none',
+                format='png', pad_inches=0.1)
     plt.close()  # 关闭当前图片
     print(f"图片已保存: {{filename}}")
     return filename

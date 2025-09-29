@@ -304,7 +304,7 @@ class EnhancedChatService:
             )
             
             # 使用增强意图识别处理查询
-            intent, file_content, web_content, sources, reasoning = await self.process_query_with_intent(
+            intent, file_content, web_content, search_results, sources, reasoning = await self.process_query_with_intent(
                 chat_request.message, attachments_data, user_id
             )
             
@@ -314,7 +314,7 @@ class EnhancedChatService:
                 intent=intent,
                 file_content=file_content,
                 web_content=web_content,
-                search_results=None,
+                search_results=search_results,
                 user_identity=user_profile,
                 contextual_prompt=contextual_prompt,
                 short_term_context=short_term_context

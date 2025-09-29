@@ -22,7 +22,8 @@ export class DatabaseStorage {
   private static getUserId(): string {
     let userId = localStorage.getItem('chatbot_user_id');
     if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // 使用固定的默认用户ID，确保对话历史记录不会丢失
+      userId = 'default_user';
       localStorage.setItem('chatbot_user_id', userId);
     }
     return userId;
