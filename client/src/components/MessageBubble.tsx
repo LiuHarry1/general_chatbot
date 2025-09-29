@@ -78,33 +78,54 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
             ) : (
               <>
-                {message.isTyping && !message.content ? (
-                  <TypingIndicator />
+                {message.content ? (
+                  <div className="inline">
+                    <ReactMarkdown
+                      components={{
+                        code({ className, children, ...props }: any) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          const inline = !match;
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={tomorrow as any}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                    {message.isTyping && (
+                      <span className="inline-block ml-1 align-middle">
+                        <span className="inline-typing-indicator">
+                          <span className="typing-dot" style={{ animationDelay: '0ms' }}></span>
+                          <span className="typing-dot" style={{ animationDelay: '150ms' }}></span>
+                          <span className="typing-dot" style={{ animationDelay: '300ms' }}></span>
+                        </span>
+                      </span>
+                    )}
+                  </div>
                 ) : (
-                  <ReactMarkdown
-                    components={{
-                      code({ className, children, ...props }: any) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const inline = !match;
-                        return !inline && match ? (
-                          <SyntaxHighlighter
-                            style={tomorrow as any}
-                            language={match[1]}
-                            PreTag="div"
-                            {...props}
-                          >
-                            {String(children).replace(/\n$/, '')}
-                          </SyntaxHighlighter>
-                        ) : (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        );
-                      },
-                    }}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
+                  message.isTyping ? (
+                    <div className="inline-flex items-center">
+                      <span className="inline-typing-indicator">
+                        <span className="typing-dot" style={{ animationDelay: '0ms' }}></span>
+                        <span className="typing-dot" style={{ animationDelay: '150ms' }}></span>
+                        <span className="typing-dot" style={{ animationDelay: '300ms' }}></span>
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 italic">消息内容为空</p>
+                  )
                 )}
               </>
             )}

@@ -18,6 +18,14 @@ class ConversationResponse(BaseModel):
     title: str
     created_at: str
     updated_at: str
+    last_message: Optional[str] = None
+    last_message_time: Optional[str] = None
+    message_count: Optional[int] = 0
+    
+    class Config:
+        json_encoders = {
+            # 确保时间格式正确
+        }
 
 
 class MessageCreate(BaseModel):
@@ -41,7 +49,7 @@ class MessageResponse(BaseModel):
     sources: Optional[List[str]] = None
     attachments: Optional[List[dict]] = None
     is_typing: bool = False
-    created_at: str
+    timestamp: str  # 前端期望的字段名
 
 
 class MessageUpdate(BaseModel):

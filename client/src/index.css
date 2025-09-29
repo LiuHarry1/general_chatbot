@@ -38,6 +38,26 @@
     @apply w-2 h-2 bg-gray-400 rounded-full animate-pulse;
   }
   
+  .inline-typing-indicator {
+    @apply inline-flex space-x-1 items-center;
+  }
+  
+  .inline-typing-indicator .typing-dot {
+    @apply w-1.5 h-1.5 bg-gray-500 rounded-full;
+    animation: typing-pulse 1.4s infinite ease-in-out;
+  }
+  
+  @keyframes typing-pulse {
+    0%, 80%, 100% {
+      transform: scale(0.8);
+      opacity: 0.5;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
   .sidebar {
     @apply bg-white border-r border-gray-200 h-full overflow-y-auto;
   }

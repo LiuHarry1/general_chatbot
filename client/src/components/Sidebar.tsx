@@ -63,6 +63,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {conversation.title}
                     </p>
+                    {conversation.lastMessage && (
+                      <p className="text-xs text-gray-600 truncate mt-1">
+                        {conversation.lastMessage}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500">
                       {formatDate(conversation.updatedAt)}
                     </p>

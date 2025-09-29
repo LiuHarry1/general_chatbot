@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Conversation, ChatMessage } from '../types';
-import { ConversationStorage } from '../utils/conversationStorage';
+import { DatabaseStorage } from '../utils/databaseStorage';
 
 export const useConversation = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -12,106 +12,188 @@ export const useConversation = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 生成或获取用户ID
-  const getUserId = useCallback((): string => {
-    let userId = localStorage.getItem('chatbot_user_id');
-    if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('chatbot_user_id', userId);
-    }
-    return userId;
-  }, []);
-
   // 初始化对话
   useEffect(() => {
-    const savedConversations = ConversationStorage.getConversations();
-    
-    if (savedConversations.length > 0) {
-      setConversations(savedConversations);
-      setCurrentConversationId(savedConversations[0].id);
-      
-      const firstConversationMessages = ConversationStorage.getMessages(savedConversations[0].id);
-      setMessages(firstConversationMessages);
-    } else {
-      const defaultConversation: Conversation = {
+    const initializeConversations = async () => {
+      setIsLoading(true);
+      try {
+        const savedConversations = await DatabaseStorage.getConversations();
+        
+        if (savedConversations.length > 0) {
+          setConversations(savedConversations);
+          setCurrentConversationId(savedConversations[0].id);
+          
+          const firstConversationMessages = await DatabaseStorage.getMessages(savedConversations[0].id);
+          setMessages(firstConversationMessages);
+        } else {
+          // 创建默认对话
+          const defaultConversation = await DatabaseStorage.createConversation('New Conversation');
+          setConversations([defaultConversation]);
+          setCurrentConversationId(defaultConversation.id);
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('初始化对话失败:', error);
+        // 如果数据库操作失败，创建本地默认对话
+        const defaultConversation: Conversation = {
+          id: Date.now().toString(),
+          title: 'New Conversation',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        setConversations([defaultConversation]);
+        setCurrentConversationId(defaultConversation.id);
+        setMessages([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeConversations();
+  }, []);
+
+  // 创建新对话
+  const createNewConversation = useCallback(async () => {
+    try {
+      const newConversation = await DatabaseStorage.createConversation('New Conversation');
+      setConversations(prev => [newConversation, ...prev]);
+      setCurrentConversationId(newConversation.id);
+      setMessages([]);
+      return newConversation;
+    } catch (error) {
+      console.error('创建对话失败:', error);
+      // 如果数据库操作失败，创建本地对话
+      const fallbackConversation: Conversation = {
         id: Date.now().toString(),
         title: 'New Conversation',
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      setConversations([defaultConversation]);
-      setCurrentConversationId(defaultConversation.id);
+      setConversations(prev => [fallbackConversation, ...prev]);
+      setCurrentConversationId(fallbackConversation.id);
       setMessages([]);
-      ConversationStorage.saveConversations([defaultConversation]);
+      return fallbackConversation;
     }
-  }, []);
-
-  // 保存消息
-  useEffect(() => {
-    if (currentConversationId && messages.length > 0) {
-      ConversationStorage.saveMessages(currentConversationId, messages);
-    }
-  }, [messages, currentConversationId]);
-
-  // 保存对话
-  useEffect(() => {
-    if (conversations.length > 0) {
-      ConversationStorage.saveConversations(conversations);
-    }
-  }, [conversations]);
-
-  // 创建新对话
-  const createNewConversation = useCallback(() => {
-    const newConversation: Conversation = {
-      id: Date.now().toString(),
-      title: 'New Conversation',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    setConversations(prev => [newConversation, ...prev]);
-    setCurrentConversationId(newConversation.id);
-    setMessages([]);
-    
-    return newConversation;
   }, []);
 
   // 选择对话
-  const selectConversation = useCallback((conversationId: string) => {
-    const conversation = conversations.find(c => c.id === conversationId);
-    if (conversation) {
+  const selectConversation = useCallback(async (conversationId: string) => {
+    try {
       setCurrentConversationId(conversationId);
-      const conversationMessages = ConversationStorage.getMessages(conversationId);
+      const conversationMessages = await DatabaseStorage.getMessages(conversationId);
       setMessages(conversationMessages);
+    } catch (error) {
+      console.error('选择对话失败:', error);
+      setMessages([]);
     }
-  }, [conversations]);
+  }, []);
 
   // 删除对话
-  const deleteConversation = useCallback((conversationId: string) => {
-    setConversations(prev => prev.filter(c => c.id !== conversationId));
-    
-    if (currentConversationId === conversationId) {
-      const remainingConversations = conversations.filter(c => c.id !== conversationId);
-      if (remainingConversations.length > 0) {
-        selectConversation(remainingConversations[0].id);
-      } else {
-        createNewConversation();
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      await DatabaseStorage.deleteConversation(conversationId);
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      
+      if (currentConversationId === conversationId) {
+        const remainingConversations = conversations.filter(c => c.id !== conversationId);
+        if (remainingConversations.length > 0) {
+          await selectConversation(remainingConversations[0].id);
+        } else {
+          await createNewConversation();
+        }
       }
+    } catch (error) {
+      console.error('删除对话失败:', error);
     }
   }, [conversations, currentConversationId, selectConversation, createNewConversation]);
 
   // 添加消息
-  const addMessage = useCallback((message: ChatMessage) => {
-    setMessages(prev => [...prev, message]);
-  }, []);
+  const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    if (!currentConversationId) {
+      console.error('没有当前对话ID');
+      return;
+    }
+
+    try {
+      const newMessage = await DatabaseStorage.createMessage({
+        conversationId: currentConversationId,
+        role: message.role,
+        content: message.content,
+        intent: message.intent,
+        sources: message.sources,
+        attachments: message.attachments,
+        isTyping: message.isTyping
+      });
+      
+      setMessages(prev => [...prev, newMessage]);
+      return newMessage;
+    } catch (error) {
+      console.error('添加消息失败:', error);
+      // 如果数据库操作失败，创建本地消息
+      const fallbackMessage: ChatMessage = {
+        ...message,
+        id: Date.now().toString(),
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, fallbackMessage]);
+      return fallbackMessage;
+    }
+  }, [currentConversationId]);
 
   // 更新消息
-  const updateMessage = useCallback((messageId: string, updates: Partial<ChatMessage>) => {
+  const updateMessage = useCallback(async (messageId: string, updates: Partial<ChatMessage>, saveToDatabase: boolean = true) => {
+    // 先更新本地状态
     setMessages(prev => 
       prev.map(msg => 
         msg.id === messageId ? { ...msg, ...updates } : msg
       )
     );
+
+    // 如果需要保存到数据库
+    if (saveToDatabase) {
+      try {
+        const updatedMessage = await DatabaseStorage.updateMessage(messageId, {
+          content: updates.content,
+          intent: updates.intent,
+          sources: updates.sources,
+          attachments: updates.attachments,
+          isTyping: updates.isTyping
+        });
+        
+        // 用数据库返回的最新数据更新状态
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId ? updatedMessage : msg
+          )
+        );
+        return updatedMessage;
+      } catch (error) {
+        console.error('更新消息失败:', error);
+        // 数据库更新失败时，本地状态已经更新，不需要额外处理
+      }
+    }
+    
+    // 返回更新后的消息（即使只是本地更新）
+    return null; // 本地更新时返回null，调用者可以使用当前状态
+  }, []);
+
+  // 更新对话标题
+  const updateConversation = useCallback(async (conversationId: string, title: string) => {
+    try {
+      const updatedConversation = await DatabaseStorage.updateConversation(conversationId, title);
+      
+      // 更新本地状态
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId ? updatedConversation : conv
+        )
+      );
+      
+      return updatedConversation;
+    } catch (error) {
+      console.error('更新对话标题失败:', error);
+      throw error;
+    }
   }, []);
 
   return {
@@ -120,11 +202,11 @@ export const useConversation = () => {
     messages,
     isLoading,
     setIsLoading,
-    getUserId,
     createNewConversation,
     selectConversation,
     deleteConversation,
     addMessage,
-    updateMessage
+    updateMessage,
+    updateConversation
   };
 };

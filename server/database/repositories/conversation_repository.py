@@ -31,12 +31,26 @@ class ConversationRepository:
         return conversation_id
     
     def get_conversations(self, user_id: str = "default_user") -> List[Dict[str, Any]]:
-        """获取用户的对话列表"""
+        """获取用户的对话列表，包含最后消息信息"""
         query = """
-            SELECT id, title, created_at, updated_at
-            FROM conversations
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
+            SELECT 
+                c.id, 
+                c.title, 
+                c.created_at, 
+                c.updated_at,
+                m.content as last_message,
+                m.created_at as last_message_time,
+                COUNT(m.id) as message_count
+            FROM conversations c
+            LEFT JOIN messages m ON c.id = m.conversation_id
+            LEFT JOIN (
+                SELECT conversation_id, MAX(created_at) as max_time
+                FROM messages
+                GROUP BY conversation_id
+            ) latest ON c.id = latest.conversation_id AND m.created_at = latest.max_time
+            WHERE c.user_id = ?
+            GROUP BY c.id, c.title, c.created_at, c.updated_at
+            ORDER BY c.updated_at DESC
         """
         
         results = self.db.execute_query(query, (user_id,))

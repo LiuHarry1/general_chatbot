@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """请求验证异常处理"""
-        app_logger.error(f"请求验证失败: {exc}")
+        app_logger.error("请求验证失败: {}", exc)
         return JSONResponse(
             status_code=422,
             content=ErrorResponse(
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         """通用异常处理"""
-        app_logger.error(f"未处理的异常: {exc}", exc_info=True)
+        app_logger.error("未处理的异常: {}", exc, exc_info=True)
         return JSONResponse(
             status_code=500,
             content=ErrorResponse(

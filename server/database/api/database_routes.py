@@ -145,6 +145,8 @@ async def create_message(message: MessageCreate):
         if not created_message:
             raise HTTPException(status_code=500, detail="消息创建失败")
         
+        # 映射字段名
+        created_message['timestamp'] = created_message['created_at']
         return MessageResponse(**created_message)
         
     except Exception as e:
@@ -158,6 +160,9 @@ async def get_messages(conversation_id: str):
         app_logger.info(f"获取对话消息: {conversation_id}")
         
         messages = message_repo.get_messages(conversation_id)
+        # 映射字段名
+        for msg in messages:
+            msg['timestamp'] = msg['created_at']
         return [MessageResponse(**msg) for msg in messages]
         
     except Exception as e:

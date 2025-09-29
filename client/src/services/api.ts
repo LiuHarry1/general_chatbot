@@ -1,4 +1,27 @@
-import { SendMessageRequest, ApiResponse } from '../types';
+import { SendMessageRequest, ApiResponse, Conversation, ChatMessage } from '../types';
+
+// API响应的原始数据类型（包含字符串日期）
+interface ConversationApiResponse {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  messageCount?: number;
+}
+
+interface MessageApiResponse {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  intent?: 'normal' | 'web' | 'file' | 'search';
+  sources?: string[];
+  attachments?: any[];
+  is_typing: boolean;
+  timestamp: string;
+}
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -118,6 +141,156 @@ export const analyzeUrl = async (url: string): Promise<{ content: string; title?
   }
 
   return response.json();
+};
+
+// 数据库API调用 - 对话管理
+export const createConversation = async (title: string, userId: string = 'default_user'): Promise<ConversationApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title, user_id: userId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getConversations = async (userId: string = 'default_user'): Promise<ConversationApiResponse[]> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations?user_id=${userId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getConversation = async (conversationId: string): Promise<ConversationApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations/${conversationId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const updateConversation = async (conversationId: string, title: string): Promise<ConversationApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations/${conversationId}?title=${encodeURIComponent(title)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const deleteConversation = async (conversationId: string): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations/${conversationId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+};
+
+// 数据库API调用 - 消息管理
+export const createMessage = async (message: {
+  conversation_id: string;
+  role: string;
+  content: string;
+  intent?: string;
+  sources?: string[];
+  attachments?: any[];
+  is_typing?: boolean;
+}): Promise<MessageApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}/db/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getMessages = async (conversationId: string): Promise<MessageApiResponse[]> => {
+  const response = await fetch(`${API_BASE_URL}/db/conversations/${conversationId}/messages`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const updateMessage = async (messageId: string, updates: {
+  content?: string;
+  intent?: string;
+  sources?: string[];
+  attachments?: any[];
+  is_typing?: boolean;
+}): Promise<MessageApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}/db/messages/${messageId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const deleteMessage = async (messageId: string): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/db/messages/${messageId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
 };
 
 

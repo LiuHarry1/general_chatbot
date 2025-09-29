@@ -13,6 +13,8 @@ client/node_modules/
 client/build/
 dist/
 
+server/chatbot.db
+
 # Logs
 
 # Environment files

@@ -37,6 +37,7 @@ export interface Conversation {
   updatedAt: Date;
   messageCount?: number;
   lastMessage?: string;
+  lastMessageTime?: Date;
 }
 
 export interface ApiResponse {
