@@ -194,9 +194,96 @@ cd client && npm install
 
 ## 📖 API文档
 
-详细的API文档请参考：[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+### 基础信息
+- **基础URL**: `http://localhost:3001/api`
+- **协议**: HTTP/HTTPS
+- **数据格式**: JSON
+- **字符编码**: UTF-8
 
-项目结构说明请参考：[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)
+### 主要API端点
+
+#### 1. 健康检查
+```bash
+GET /api/health
+# 响应: {"status": "OK", "timestamp": "...", "uptime": 1234.567}
+```
+
+#### 2. 聊天对话
+```bash
+POST /api/chat
+{
+  "message": "用户消息内容",
+  "conversationId": "对话ID",
+  "attachments": [{"type": "file", "data": {"name": "文件名", "content": "文件内容"}}]
+}
+```
+
+#### 3. 文件上传
+```bash
+POST /api/upload
+# 支持: PDF, DOC, DOCX, TXT, MD (最大10MB)
+```
+
+#### 4. 网页分析
+```bash
+POST /api/analyze-url
+{"url": "https://example.com"}
+```
+
+### 使用示例
+
+```bash
+# 普通对话
+curl -X POST http://localhost:3001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "你好，请介绍一下自己", "conversationId": "conv_001"}'
+
+# 文件分析
+curl -X POST http://localhost:3001/api/upload -F "file=@document.pdf"
+
+# 网页分析
+curl -X POST http://localhost:3001/api/analyze-url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+## 📁 项目结构
+
+```
+general_chatbot/
+├── client/                 # React 前端应用
+│   ├── src/               # React 源代码
+│   │   ├── components/    # UI组件
+│   │   ├── hooks/         # React Hooks
+│   │   ├── services/      # API服务
+│   │   └── utils/         # 工具函数
+│   ├── package.json       # 前端依赖管理
+│   └── start.sh/bat       # 前端启动脚本
+├── server/                # Python 后端服务
+│   ├── api/               # API 路由
+│   │   └── v1/            # API版本1
+│   ├── services/          # 业务逻辑服务
+│   ├── models/            # 数据模型
+│   ├── config/            # 配置管理
+│   ├── memory_simple/     # 记忆系统
+│   ├── database/          # 数据访问层
+│   ├── utils/             # 工具函数
+│   ├── logs/              # 日志文件
+│   ├── requirements.txt   # Python 依赖
+│   ├── main.py            # 主程序入口
+│   └── start.sh/bat       # 后端启动脚本
+├── tests/                 # 测试框架
+├── start.sh/bat           # 主启动脚本
+├── stop.sh/bat            # 主停止脚本
+├── env.example            # 环境变量模板
+└── README.md              # 项目说明
+```
+
+### 代码分离原则
+- ✅ **前端代码** 仅放在 `client/` 目录下
+- ✅ **Python 后端代码** 仅放在 `server/` 目录下
+- ✅ **日志文件** 统一放在 `server/logs/` 目录下
+- ✅ **启动/停止脚本** 各自在对应目录下，根目录脚本调用子目录脚本
 
 ## 🚀 部署
 
@@ -216,6 +303,10 @@ python main.py
 - `DASHSCOPE_API_KEY`: 通义千问API密钥
 - `TAVILY_API_KEY`: Tavily搜索API密钥
 - `PORT`: 服务器端口（默认3001）
+
+## 📚 相关文档
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - 技术架构文档（开发者指南）
 
 ## 📄 许可证
 
