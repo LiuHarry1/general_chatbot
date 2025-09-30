@@ -69,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       </p>
                     )}
                     <p className="text-xs text-gray-500">
-                      {formatDate(conversation.updatedAt)}
+                      {formatDate(conversation.updatedAt as Date)}
                     </p>
                   </div>
                   

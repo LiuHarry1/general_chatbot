@@ -153,7 +153,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </div>
         
         <div className={`text-xs text-gray-400 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-          {formatTime(message.timestamp)}
+          {formatTime(new Date(message.created_at))}
         </div>
       </div>
     </div>

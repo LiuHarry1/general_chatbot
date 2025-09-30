@@ -2,7 +2,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+  created_at: Date;
   attachments?: Attachment[];
   intent?: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
@@ -44,7 +44,7 @@ export interface ApiResponse {
   content: string;
   intent: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
-  timestamp?: string;
+  created_at?: Date;
 }
 
 export interface IntentIndicator {

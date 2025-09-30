@@ -20,7 +20,7 @@ interface MessageApiResponse {
   sources?: string[];
   attachments?: any[];
   is_typing: boolean;
-  timestamp: string;
+  created_at: string;
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -44,7 +44,7 @@ export const sendMessage = async (request: SendMessageRequest): Promise<ApiRespo
 export const sendMessageStream = async (
   request: SendMessageRequest,
   onChunk: (chunk: string) => void,
-  onMetadata: (metadata: { intent?: string; sources?: string[]; timestamp?: string }) => void,
+  onMetadata: (metadata: { intent?: string; sources?: string[]; created_at?: Date }) => void,
   onError: (error: string) => void,
   onEnd: () => void,
   onImage?: (image: { url: string; filename: string }) => void
@@ -88,7 +88,7 @@ export const sendMessageStream = async (
                 onMetadata({
                   intent: data.intent,
                   sources: data.sources,
-                  timestamp: data.timestamp
+                  created_at: data.created_at ? new Date(data.created_at) : undefined
                 });
                 break;
               case 'content':
@@ -254,7 +254,7 @@ export const createMessage = async (message: {
 };
 
 export const getMessages = async (conversationId: string): Promise<MessageApiResponse[]> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations/${conversationId}/messages`, {
+  const response = await fetch(`${API_BASE_URL}/v1/db/messages/conversations/${conversationId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',

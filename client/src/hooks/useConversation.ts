@@ -108,7 +108,7 @@ export const useConversation = () => {
   }, [conversations, currentConversationId, selectConversation, createNewConversation]);
 
   // 添加消息
-  const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+  const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'created_at'>) => {
     if (!currentConversationId) {
       console.error('没有当前对话ID');
       return;
@@ -133,7 +133,7 @@ export const useConversation = () => {
       const fallbackMessage: ChatMessage = {
         ...message,
         id: Date.now().toString(),
-        timestamp: new Date()
+        created_at: new Date()
       };
       setMessages(prev => [...prev, fallbackMessage]);
       return fallbackMessage;

@@ -49,7 +49,7 @@ class MessageResponse(BaseModel):
     sources: Optional[List[str]] = None
     attachments: Optional[List[dict]] = None
     is_typing: bool = False
-    timestamp: str  # 前端期望的字段名
+    created_at: str  # 统一使用created_at字段名
 
 
 class MessageUpdate(BaseModel):

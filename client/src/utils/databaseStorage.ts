@@ -62,7 +62,7 @@ export class DatabaseStorage {
       const conversations = await getConversations(userId);
       
       // 转换日期格式和字段名
-      return conversations.map(conv => ({
+      return conversations.map((conv): Conversation => ({
         id: conv.id,
         title: conv.title,
         createdAt: this.parseDate(conv.createdAt),
@@ -169,7 +169,7 @@ export class DatabaseStorage {
         id: msg.id,
         role: msg.role,
         content: msg.content,
-        timestamp: this.parseDate(msg.timestamp),
+        created_at: this.parseDate(msg.created_at),
         attachments: msg.attachments,
         intent: msg.intent,
         sources: msg.sources,
@@ -208,7 +208,7 @@ export class DatabaseStorage {
         id: newMessage.id,
         role: newMessage.role,
         content: newMessage.content,
-        timestamp: this.parseDate(newMessage.timestamp),
+        created_at: this.parseDate(newMessage.created_at),
         attachments: newMessage.attachments,
         intent: newMessage.intent,
         sources: newMessage.sources,
@@ -246,7 +246,7 @@ export class DatabaseStorage {
         id: message.id,
         role: message.role,
         content: message.content,
-        timestamp: this.parseDate(message.timestamp),
+        created_at: this.parseDate(message.created_at),
         attachments: message.attachments,
         intent: message.intent,
         sources: message.sources,

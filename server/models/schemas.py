@@ -59,7 +59,7 @@ class FileUploadResponse(BaseModel):
 
 class UrlAnalysisRequest(BaseModel):
     """URL分析请求模型"""
-    url: HttpUrl = Field(..., description="要分析的URL")
+    url: str = Field(..., description="要分析的URL")
 
 
 class UrlAnalysisResponse(BaseModel):
