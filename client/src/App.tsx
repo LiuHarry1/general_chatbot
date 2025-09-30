@@ -212,55 +212,77 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+      {/* 侧边栏 */}
       {sidebarVisible && (
-        <Sidebar
-          conversations={conversations}
-          currentConversationId={currentConversationId}
-          onNewConversation={handleNewConversation}
-          onSelectConversation={handleSelectConversation}
-          onDeleteConversation={handleDeleteConversation}
-        />
+        <div className="w-64 flex-shrink-0">
+          <Sidebar
+            conversations={conversations}
+            currentConversationId={currentConversationId}
+            onNewConversation={handleNewConversation}
+            onSelectConversation={handleSelectConversation}
+            onDeleteConversation={handleDeleteConversation}
+          />
+        </div>
       )}
       
-      <div className={`flex-1 flex flex-col chat-container ${!sidebarVisible ? 'mx-auto max-w-6xl' : ''}`}>
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+      {/* 主聊天区域 */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 顶部导航栏 */}
+        <header className="bg-white/80 backdrop-blur-sm px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
             <button
               onClick={() => setSidebarVisible(!sidebarVisible)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2.5 hover:bg-gray-100 rounded-xl transition-all duration-200 hover:scale-105"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold text-gray-900">AI 助手</h1>
           </div>
           
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
+          {/* 用户信息和操作 */}
+          <div className="flex items-center space-x-4">
+            {/* 状态指示器 */}
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-50 rounded-full">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-green-700">在线</span>
+            </div>
+            
+            {/* 用户头像和信息 */}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white text-sm font-semibold">
                   {user?.username?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
-              <span className="text-sm text-gray-700">{user?.username}</span>
+              <div className="hidden sm:block">
+                <p className="text-sm font-medium text-gray-900">{user?.username}</p>
+                <p className="text-xs text-gray-500">智能助手用户</p>
+              </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              退出
-            </button>
+            
+            {/* 操作按钮 */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              >
+                退出
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <ChatArea messages={messages} isLoading={isLoading} />
-        <InputArea 
-          onSendMessage={handleSendMessage} 
-          attachments={currentAttachments}
-          onAttachmentsChange={handleAttachmentsChange}
-        />
+        {/* 聊天内容区域 */}
+        <main className="flex-1 flex flex-col min-h-0">
+          <ChatArea messages={messages} isLoading={isLoading} />
+          <InputArea 
+            onSendMessage={handleSendMessage} 
+            attachments={currentAttachments}
+            onAttachmentsChange={handleAttachmentsChange}
+          />
+        </main>
       </div>
     </div>
   );

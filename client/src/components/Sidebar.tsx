@@ -29,49 +29,51 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-80 sidebar bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="w-full sidebar bg-white/95 backdrop-blur-sm border-r border-gray-200/60 flex flex-col h-full shadow-xl">
       {/* Logo和标题区域 */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
+      <div className="p-6 border-b border-gray-200/60">
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg">
+            <Bot className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900">AI助手</h1>
-            <p className="text-xs text-gray-500">智能对话伙伴</p>
+            <h1 className="text-xl font-bold text-gray-900">AI助手</h1>
+            <p className="text-sm text-gray-500">智能对话伙伴</p>
           </div>
         </div>
         
-        {/* 新对话按钮 */}
-        <button
-          onClick={onNewConversation}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-        >
-          <Sparkles className="w-5 h-5" />
-          <span className="font-medium">开始新对话</span>
-        </button>
+               {/* 新对话按钮 */}
+               <button
+                 onClick={onNewConversation}
+                 className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 group"
+               >
+                 <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                 </svg>
+                 <span className="text-sm font-medium">开始新对话</span>
+               </button>
       </div>
 
       {/* 快速功能区域 */}
-      <div className="p-4 border-b border-gray-100">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+      <div className="p-6 border-b border-gray-200/60">
+        <h3 className="text-sm font-semibold text-gray-500 mb-4">
           快速功能
         </h3>
-        <div className="grid grid-cols-2 gap-2">
-          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-            <MessageSquare className="w-4 h-4" />
+        <div className="space-y-1">
+          <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 group">
+            <MessageSquare className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
             <span>文档分析</span>
           </button>
-          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-            <Sparkles className="w-4 h-4" />
+          <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 group">
+            <Sparkles className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
             <span>创意写作</span>
           </button>
-          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-            <Bot className="w-4 h-4" />
+          <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 group">
+            <Bot className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
             <span>代码助手</span>
           </button>
-          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-            <MoreHorizontal className="w-4 h-4" />
+          <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 group">
+            <MoreHorizontal className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
             <span>更多</span>
           </button>
         </div>
@@ -79,13 +81,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* 对话历史区域 */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center space-x-2">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center space-x-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></div>
               <Clock className="w-4 h-4" />
               <span>对话历史</span>
             </h3>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+            <span className="text-xs font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-600 px-3 py-1.5 rounded-full shadow-sm">
               {conversations.length}
             </span>
           </div>
@@ -164,7 +167,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* 用户信息区域 */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-600 rounded-xl flex items-center justify-center">
             <Star className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">

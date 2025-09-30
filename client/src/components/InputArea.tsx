@@ -183,10 +183,10 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
   };
 
   return (
-    <div className="input-area">
+    <div className="input-area bg-white px-4 pt-0 pb-2">
       {/* 上部分：附件显示区域 */}
       {attachments.length > 0 && (
-        <div className="mb-4 space-y-3">
+        <div className="mb-2 space-y-2">
           {/* 附件列表 */}
           <div className="space-y-2">
             {attachments.map((attachment, index) => (
@@ -247,36 +247,36 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
       )}
 
       {/* 中间部分：输入区域 */}
-      <div className="input-container">
-        <form onSubmit={handleSubmit} className="flex items-center p-3 space-x-3">
+      <div className="input-container -mt-3">
+               <form onSubmit={handleSubmit} className="flex items-end bg-white rounded-2xl border border-gray-200/60 p-3 space-x-4 shadow-lg hover:shadow-xl transition-all duration-300">
           {/* 左侧功能按钮组 */}
           <div className="flex items-center space-x-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 hover:bg-blue-50 rounded-xl transition-all duration-200 hover:scale-105 group"
               title="上传文件（支持多选）"
             >
-              <Paperclip className="w-5 h-5 text-gray-600" />
+              <Paperclip className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
             </button>
             
             <button
               type="button"
               onClick={() => handleUrlAnalysis()}
               disabled={isUploading}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 hover:bg-green-50 rounded-xl transition-all duration-200 hover:scale-105 group"
               title="分析网页"
             >
-              <Link className="w-5 h-5 text-gray-600" />
+              <Link className="w-5 h-5 text-gray-600 group-hover:text-green-600 transition-colors" />
             </button>
 
             <button
               type="button"
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 hover:bg-purple-50 rounded-xl transition-all duration-200 hover:scale-105 group"
               title="深度思考"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
             </button>
@@ -290,9 +290,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder={attachments.length > 0 ? "总结一下这个文件" : "输入消息，或使用 / 选择功能..."}
-              className="w-full px-4 py-3 bg-transparent border-none outline-none resize-none text-gray-900 placeholder-gray-500"
+                     className="w-full px-3 py-3 bg-transparent border-none outline-none resize-none text-gray-900 placeholder-gray-500 text-base leading-relaxed"
               rows={1}
-              style={{ minHeight: '24px', maxHeight: '120px' }}
+              style={{ minHeight: '28px', maxHeight: '120px' }}
             />
           </div>
 
@@ -300,20 +300,20 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 hover:bg-orange-50 rounded-xl transition-all duration-200 hover:scale-105 group"
               title="剪切"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600 group-hover:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
 
             <button
               type="button"
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 hover:bg-pink-50 rounded-xl transition-all duration-200 hover:scale-105 group"
               title="语音输入"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600 group-hover:text-pink-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </button>
@@ -321,12 +321,12 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
             <button
               type="submit"
               disabled={(!input.trim() && attachments.length === 0) || isUploading}
-              className="w-8 h-8 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
+              className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl group"
             >
               {isUploading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-white group-hover:translate-x-0.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               )}
