@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChatMessage } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Globe, FileText, MessageCircle, Search, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
 import TypingIndicator from './TypingIndicator';
 
@@ -84,7 +84,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       <div className={`${isUser ? 'max-w-xs' : 'max-w-4xl'}`}>
         {/* 用户消息样式 */}
         {isUser ? (
-          <div className="bg-gray-50 text-gray-900 rounded-2xl rounded-br-md px-4 py-3">
+          <div className="bg-gray-100 text-gray-900 rounded-2xl rounded-br-md px-4 py-3">
             <p className="whitespace-pre-wrap leading-relaxed text-base">{message.content}</p>
           </div>
         ) : (
@@ -114,7 +114,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                               const inline = !match;
                               return !inline && match ? (
                                 <SyntaxHighlighter
-                                  style={tomorrow as any}
+                                  style={oneLight as any}
                                   language={match[1]}
                                   PreTag="div"
                                   {...props}
@@ -175,38 +175,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                       </div>
                     </div>
                   )}
-                </div>
-                
-                {/* 操作按钮 - 显示在左下角 */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-start bg-white">
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={handleLike}
-                      className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
-                        liked ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-                      }`}
-                      title="点赞"
-                    >
-                      <ThumbsUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={handleDislike}
-                      className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
-                        disliked ? 'text-red-600' : 'text-gray-500 hover:text-red-600'
-                      }`}
-                      title="点踩"
-                    >
-                      <ThumbsDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={handleCopy}
-                      className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
-                        copied ? 'text-green-600' : 'text-gray-500 hover:text-green-600'
-                      }`}
-                      title={copied ? '已复制' : '复制'}
-                    >
-                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                  
+                  {/* 操作按钮 - 与文字内容对齐 */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-start mt-4">
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={handleLike}
+                        className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
+                          liked ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+                        }`}
+                        title="点赞"
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleDislike}
+                        className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
+                          disliked ? 'text-red-600' : 'text-gray-500 hover:text-red-600'
+                        }`}
+                        title="点踩"
+                      >
+                        <ThumbsDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleCopy}
+                        className={`p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
+                          copied ? 'text-green-600' : 'text-gray-500 hover:text-green-600'
+                        }`}
+                        title={copied ? '已复制' : '复制'}
+                      >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

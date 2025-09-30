@@ -2,7 +2,7 @@
  * 对话管理 Hook
  * 封装对话相关的状态管理和业务逻辑
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Conversation, ChatMessage } from '../types';
 import { DatabaseStorage } from '../utils/databaseStorage';
 
@@ -11,14 +11,18 @@ export const useConversation = (userId?: string) => {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 使用ref来跟踪当前对话ID，避免状态更新的异步问题
+  const currentConversationIdRef = useRef<string | null>(null);
 
   // 初始化对话
   useEffect(() => {
     const initializeConversations = async () => {
-      if (!userId) {
+        if (!userId) {
         // 如果没有用户ID，清空数据
         setConversations([]);
         setCurrentConversationId(null);
+        currentConversationIdRef.current = null;
         setMessages([]);
         setIsLoading(false);
         return;
@@ -29,16 +33,34 @@ export const useConversation = (userId?: string) => {
         const savedConversations = await DatabaseStorage.getConversations(userId);
         
         if (savedConversations.length > 0) {
-          setConversations(savedConversations);
-          setCurrentConversationId(savedConversations[0].id);
+          // 过滤掉没有消息的对话
+          const conversationsWithMessages = [];
+          for (const conversation of savedConversations) {
+            const messages = await DatabaseStorage.getMessages(conversation.id);
+            if (messages.length > 0) {
+              conversationsWithMessages.push(conversation);
+            }
+          }
           
-          const firstConversationMessages = await DatabaseStorage.getMessages(savedConversations[0].id);
-          setMessages(firstConversationMessages);
+          if (conversationsWithMessages.length > 0) {
+            setConversations(conversationsWithMessages);
+            setCurrentConversationId(conversationsWithMessages[0].id);
+            currentConversationIdRef.current = conversationsWithMessages[0].id;
+            
+            const firstConversationMessages = await DatabaseStorage.getMessages(conversationsWithMessages[0].id);
+            setMessages(firstConversationMessages);
+          } else {
+            // 所有对话都没有消息，显示空状态
+            setConversations([]);
+            setCurrentConversationId(null);
+            currentConversationIdRef.current = null;
+            setMessages([]);
+          }
         } else {
-          // 创建默认对话
-          const defaultConversation = await DatabaseStorage.createConversation('New Conversation', userId);
-          setConversations([defaultConversation]);
-          setCurrentConversationId(defaultConversation.id);
+          // 没有对话时，不创建默认对话，等待用户发送消息时再创建
+          setConversations([]);
+          setCurrentConversationId(null);
+          currentConversationIdRef.current = null;
           setMessages([]);
         }
       } catch (error) {
@@ -46,6 +68,7 @@ export const useConversation = (userId?: string) => {
         // 如果数据库操作失败，显示空状态
         setConversations([]);
         setCurrentConversationId(null);
+        currentConversationIdRef.current = null;
         setMessages([]);
       } finally {
         setIsLoading(false);
@@ -63,6 +86,7 @@ export const useConversation = (userId?: string) => {
       const newConversation = await DatabaseStorage.createConversation('New Conversation', userId);
       setConversations(prev => [newConversation, ...prev]);
       setCurrentConversationId(newConversation.id);
+      currentConversationIdRef.current = newConversation.id;
       setMessages([]);
       return newConversation;
     } catch (error) {
@@ -75,6 +99,7 @@ export const useConversation = (userId?: string) => {
   const selectConversation = useCallback(async (conversationId: string) => {
     try {
       setCurrentConversationId(conversationId);
+      currentConversationIdRef.current = conversationId;
       const conversationMessages = await DatabaseStorage.getMessages(conversationId);
       setMessages(conversationMessages);
     } catch (error) {
@@ -94,7 +119,10 @@ export const useConversation = (userId?: string) => {
         if (remainingConversations.length > 0) {
           await selectConversation(remainingConversations[0].id);
         } else {
-          await createNewConversation();
+          // 删除最后一个对话后，重置状态，不创建新对话
+          setCurrentConversationId(null);
+          currentConversationIdRef.current = null;
+          setMessages([]);
         }
       }
     } catch (error) {
@@ -104,14 +132,29 @@ export const useConversation = (userId?: string) => {
 
   // 添加消息
   const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'created_at'>) => {
-    if (!currentConversationId || !userId) {
-      console.error('没有当前对话ID或用户ID');
+    if (!userId) {
+      console.error('没有用户ID');
       return;
     }
 
     try {
+      let conversationId = currentConversationIdRef.current;
+      
+      // 如果没有当前对话，创建一个新对话
+      if (!conversationId) {
+        console.log('创建新对话，当前conversationId:', conversationId);
+        const newConversation = await DatabaseStorage.createConversation('New Conversation', userId);
+        setConversations(prev => [newConversation, ...prev]);
+        setCurrentConversationId(newConversation.id);
+        currentConversationIdRef.current = newConversation.id;
+        conversationId = newConversation.id;
+        console.log('新对话创建完成，ID:', conversationId);
+      } else {
+        console.log('使用现有对话，ID:', conversationId);
+      }
+
       const newMessage = await DatabaseStorage.createMessage({
-        conversationId: currentConversationId,
+        conversationId: conversationId,
         role: message.role,
         content: message.content,
         intent: message.intent,
@@ -190,6 +233,13 @@ export const useConversation = (userId?: string) => {
     }
   }, []);
 
+  // 重置对话状态（用于新对话）
+  const resetConversation = useCallback(() => {
+    setCurrentConversationId(null);
+    currentConversationIdRef.current = null;
+    setMessages([]);
+  }, []);
+
   return {
     conversations,
     currentConversationId,
@@ -201,6 +251,7 @@ export const useConversation = (userId?: string) => {
     deleteConversation,
     addMessage,
     updateMessage,
-    updateConversation
+    updateConversation,
+    resetConversation
   };
 };

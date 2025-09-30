@@ -27,7 +27,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, isLoading }) => {
           <div className="text-center py-8">
             {/* 主Logo和欢迎信息 */}
             <div className="mb-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-300 to-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <Bot className="w-10 h-10 text-white" />
               </div>
               <h2 className="text-3xl font-bold text-gray-900 mb-3">

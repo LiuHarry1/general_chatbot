@@ -226,6 +226,7 @@ export class DatabaseStorage {
 
       return {
         id: newMessage.id,
+        conversationId: message.conversationId,
         role: newMessage.role,
         content: newMessage.content,
         created_at: this.parseDate(newMessage.created_at),
@@ -233,7 +234,7 @@ export class DatabaseStorage {
         intent: newMessage.intent,
         sources: newMessage.sources,
         isTyping: newMessage.is_typing
-      };
+      } as ChatMessage;
     } catch (error) {
       console.error('创建消息失败:', error);
       throw error;

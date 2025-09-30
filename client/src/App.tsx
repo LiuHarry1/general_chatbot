@@ -7,13 +7,27 @@ import { ChatMessage, Conversation, Attachment, User } from './types';
 import { sendMessageStream } from './services/api';
 import { useConversation } from './hooks/useConversation';
 import { useAuth } from './hooks/useAuth';
+import { PanelLeftOpen, Bot } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentAttachments, setCurrentAttachments] = useState<Attachment[]>([]);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [isNewConversation, setIsNewConversation] = useState(true);
   
   // 使用认证管理hook
   const { user, isAuthenticated, isLoading: authLoading, login, logout } = useAuth();
+
+  // 获取动态问候语
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 6) return '夜深了';
+    if (hour < 12) return '早上好';
+    if (hour < 14) return '中午好';
+    if (hour < 18) return '下午好';
+    if (hour < 22) return '晚上好';
+    return '夜深了';
+  };
   
   // 使用对话管理hook
   const {
@@ -27,7 +41,8 @@ const App: React.FC = () => {
     deleteConversation,
     addMessage,
     updateMessage,
-    updateConversation
+    updateConversation,
+    resetConversation
   } = useConversation(user?.id);
 
 
@@ -39,6 +54,11 @@ const App: React.FC = () => {
 
     // 保存添加用户消息前的消息数量，用于判断是否需要更新对话标题
     const messagesBeforeUserMessage = messages;
+    
+    // 如果是新对话，发送消息后将其标记为非新对话
+    if (isNewConversation) {
+      setIsNewConversation(false);
+    }
 
     // 添加用户消息到数据库
     const userMessage = await addMessage({
@@ -142,10 +162,10 @@ const App: React.FC = () => {
       
       // 更新对话标题（如果是第一条消息）
       // 注意：这里检查的是添加用户消息前的消息数量
-      if (messagesBeforeUserMessage.length === 0 && currentConversationId) {
+      if (messagesBeforeUserMessage.length === 0 && userMessage?.conversationId) {
         const conversationTitle = content.length > 30 ? content.substring(0, 30) + '...' : content;
         try {
-          await updateConversation(currentConversationId, conversationTitle);
+          await updateConversation(userMessage.conversationId, conversationTitle);
         } catch (error) {
           console.error('更新对话标题失败:', error);
         }
@@ -167,10 +187,12 @@ const App: React.FC = () => {
 
   const handleNewConversation = async () => {
     try {
-      await createNewConversation();
+      // 重置对话状态，不创建空对话
+      resetConversation();
       setCurrentAttachments([]); // 新对话时清空附件
+      setIsNewConversation(true); // 标记为新对话
     } catch (error) {
-      console.error('创建新对话失败:', error);
+      console.error('重置对话状态失败:', error);
       // 可以显示错误提示给用户
     }
   };
@@ -178,6 +200,7 @@ const App: React.FC = () => {
   const handleSelectConversation = async (conversationId: string) => {
     await selectConversation(conversationId);
     setCurrentAttachments([]); // 切换对话时清空附件
+    setIsNewConversation(false); // 选择已有对话，不是新对话
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -192,7 +215,40 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     logout();
+    setUserDropdownOpen(false);
   };
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.user-dropdown')) {
+        setUserDropdownOpen(false);
+      }
+    };
+
+    if (userDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userDropdownOpen]);
+
+  // 监听消息变化，如果有消息则不是新对话
+  useEffect(() => {
+    if (messages.length > 0) {
+      setIsNewConversation(false);
+    }
+  }, [messages]);
+
+  // 监听对话变化，如果没有对话则显示新对话界面
+  useEffect(() => {
+    if (conversations.length === 0) {
+      setIsNewConversation(true);
+    }
+  }, [conversations]);
 
   // 如果正在加载认证状态，显示加载界面
   if (authLoading) {
@@ -214,14 +270,16 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
       {/* 侧边栏 */}
-      {sidebarVisible && (
-        <div className="w-64 flex-shrink-0">
+      {!sidebarCollapsed && (
+        <div className="w-64 flex-shrink-0 transition-all duration-300">
           <Sidebar
             conversations={conversations}
             currentConversationId={currentConversationId}
             onNewConversation={handleNewConversation}
             onSelectConversation={handleSelectConversation}
             onDeleteConversation={handleDeleteConversation}
+            isCollapsed={false}
+            onToggleCollapse={() => setSidebarCollapsed(true)}
           />
         </div>
       )}
@@ -231,17 +289,32 @@ const App: React.FC = () => {
         {/* 顶部导航栏 */}
         <header className="bg-white/80 backdrop-blur-sm px-4 py-2 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setSidebarVisible(!sidebarVisible)}
-              className="p-2.5 hover:bg-gray-100 rounded-xl transition-all duration-200 hover:scale-105"
-            >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+            {/* 当侧栏收起时显示展开按钮和新对话按钮 */}
+            {sidebarCollapsed && (
+              <>
+                <button
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105 group shadow-sm"
+                  title="展开侧栏"
+                >
+                  <PanelLeftOpen className="w-4 h-4 text-gray-600 group-hover:text-gray-800 transition-colors" />
+                </button>
+                
+                <button
+                  onClick={handleNewConversation}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all duration-200 hover:scale-105 group"
+                  title="新对话"
+                >
+                  <svg className="w-4 h-4 text-blue-600 group-hover:text-blue-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-600 group-hover:text-blue-800">新对话</span>
+                </button>
+              </>
+            )}
           </div>
           
-          {/* 用户信息和操作 */}
+          {/* 用户信息和操作 - 始终显示 */}
           <div className="flex items-center space-x-4">
             {/* 状态指示器 */}
             <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-50 rounded-full">
@@ -250,38 +323,107 @@ const App: React.FC = () => {
             </div>
             
             {/* 用户头像和信息 */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white text-sm font-semibold">
-                  {user?.username?.charAt(0).toUpperCase() || 'U'}
-                </span>
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-medium text-gray-900">{user?.username}</p>
-                <p className="text-xs text-gray-500">智能助手用户</p>
-              </div>
-            </div>
-            
-            {/* 操作按钮 */}
-            <div className="flex items-center space-x-2">
+            <div className="relative user-dropdown">
               <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center space-x-3 hover:bg-gray-50 rounded-lg p-1 transition-colors duration-200"
               >
-                退出
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-300 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white text-sm font-semibold">
+                    {user?.username?.charAt(0).toUpperCase() || 'U'}
+                  </span>
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-gray-900">{user?.username}</p>
+                </div>
               </button>
+
+              {/* 下拉菜单 */}
+              {userDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">{user?.username}</p>
+                    <p className="text-xs text-gray-500">智能助手用户</p>
+                  </div>
+                  
+                  <div className="py-1">
+                    <button className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                      <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      设置
+                    </button>
+                    
+                    <button className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                      <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      下载电脑版
+                    </button>
+                    
+                    <button className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                      <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                      下载手机应用
+                      <svg className="w-4 h-4 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="border-t border-gray-100 pt-1">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200"
+                    >
+                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      退出登录
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* 聊天内容区域 */}
         <main className="flex-1 flex flex-col min-h-0">
-          <ChatArea messages={messages} isLoading={isLoading} />
-          <InputArea 
-            onSendMessage={handleSendMessage} 
-            attachments={currentAttachments}
-            onAttachmentsChange={handleAttachmentsChange}
-          />
+          {isNewConversation ? (
+            // 新对话：输入框在中间
+            <div className="flex-1 flex flex-col items-center justify-center relative bg-white">
+              <div className="w-full max-w-4xl px-8">
+                <div className="text-center mb-8">
+                  {/* 图标 */}
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-300 to-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <Bot className="w-10 h-10 text-white" />
+                  </div>
+                  {/* 欢迎文字 */}
+                  <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                    {getGreeting()}, {user?.username || '用户'}
+                  </h2>
+                </div>
+                <InputArea 
+                  onSendMessage={handleSendMessage} 
+                  attachments={currentAttachments}
+                  onAttachmentsChange={handleAttachmentsChange}
+                />
+              </div>
+            </div>
+          ) : (
+            // 已有对话：正常布局
+            <>
+              <ChatArea messages={messages} isLoading={isLoading} />
+              <InputArea 
+                onSendMessage={handleSendMessage} 
+                attachments={currentAttachments}
+                onAttachmentsChange={handleAttachmentsChange}
+              />
+            </>
+          )}
         </main>
       </div>
     </div>

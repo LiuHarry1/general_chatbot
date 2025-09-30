@@ -183,7 +183,8 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
   };
 
   return (
-    <div className="input-area bg-white px-4 pt-0 pb-2">
+    <div className="input-area bg-white pt-0 pb-2">
+      <div className="max-w-5xl mx-auto px-8">
       {/* 上部分：附件显示区域 */}
       {attachments.length > 0 && (
         <div className="mb-2 space-y-2">
@@ -248,89 +249,98 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
 
       {/* 中间部分：输入区域 */}
       <div className="input-container -mt-3">
-               <form onSubmit={handleSubmit} className="flex items-end bg-white rounded-2xl border border-gray-200/60 p-3 space-x-4 shadow-lg hover:shadow-xl transition-all duration-300">
-          {/* 左侧功能按钮组 */}
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="p-3 hover:bg-blue-50 rounded-xl transition-all duration-200 hover:scale-105 group"
-              title="上传文件（支持多选）"
-            >
-              <Paperclip className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => handleUrlAnalysis()}
-              disabled={isUploading}
-              className="p-3 hover:bg-green-50 rounded-xl transition-all duration-200 hover:scale-105 group"
-              title="分析网页"
-            >
-              <Link className="w-5 h-5 text-gray-600 group-hover:text-green-600 transition-colors" />
-            </button>
-
-            <button
-              type="button"
-              className="p-3 hover:bg-purple-50 rounded-xl transition-all duration-200 hover:scale-105 group"
-              title="深度思考"
-            >
-              <svg className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 输入框 */}
-          <div className="flex-1 relative">
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200/60">
+          {/* 文字输入区域 */}
+          <div className="p-4 pb-2">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
-              placeholder={attachments.length > 0 ? "总结一下这个文件" : "输入消息，或使用 / 选择功能..."}
-                     className="w-full px-3 py-3 bg-transparent border-none outline-none resize-none text-gray-900 placeholder-gray-500 text-base leading-relaxed"
+              placeholder="发消息或输入 / 选择技能"
               rows={1}
               style={{ minHeight: '28px', maxHeight: '120px' }}
+              className="w-full px-0 py-0 bg-transparent border-none outline-none resize-none text-gray-900 placeholder-gray-500 text-base leading-relaxed"
             />
           </div>
 
-          {/* 右侧功能按钮组 */}
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              className="p-3 hover:bg-orange-50 rounded-xl transition-all duration-200 hover:scale-105 group"
-              title="剪切"
-            >
-              <svg className="w-5 h-5 text-gray-600 group-hover:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              className="p-3 hover:bg-pink-50 rounded-xl transition-all duration-200 hover:scale-105 group"
-              title="语音输入"
-            >
-              <svg className="w-5 h-5 text-gray-600 group-hover:text-pink-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
-            </button>
-
-            <button
-              type="submit"
-              disabled={(!input.trim() && attachments.length === 0) || isUploading}
-              className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl group"
-            >
-              {isUploading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-5 h-5 text-white group-hover:translate-x-0.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          {/* 按钮区域 */}
+          <div className="px-4 pb-4 flex items-center justify-between">
+            {/* 左侧功能按钮组 */}
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="px-3 py-2 hover:bg-gray-50 rounded-lg border border-gray-200 transition-all duration-200 hover:scale-105 group"
+                title="上传文件（支持多选）"
+              >
+                <Paperclip className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+              </button>
+              
+              <button
+                type="button"
+                className="px-2 hover:bg-gray-50 rounded-lg border border-gray-200 transition-all duration-200 hover:scale-105 group flex items-center space-x-1.5"
+                style={{ paddingTop: '0.47rem', paddingBottom: '0.47rem' }}
+                title="深度思考"
+              >
+                <svg className="w-4 h-4 text-gray-600 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-              )}
-            </button>
+                <span className="text-xs text-gray-600 group-hover:text-purple-600">深度思考</span>
+              </button>
+
+              <button
+                type="button"
+                className="px-2 hover:bg-gray-50 rounded-lg border border-gray-200 transition-all duration-200 hover:scale-105 group flex items-center space-x-1.5"
+                style={{ paddingTop: '0.47rem', paddingBottom: '0.47rem' }}
+                title="技能"
+              >
+                <svg className="w-4 h-4 text-gray-600 group-hover:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+                <span className="text-xs text-gray-600 group-hover:text-orange-600">技能</span>
+              </button>
+            </div>
+
+            {/* 右侧功能按钮组 */}
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                className="p-2 hover:bg-gray-50 rounded-lg transition-all duration-200 hover:scale-105 group"
+                title="剪切"
+              >
+                <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className="p-2 hover:bg-gray-50 rounded-lg transition-all duration-200 hover:scale-105 group"
+                title="语音输入"
+              >
+                <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+
+              <div className="w-px h-6 bg-gray-300"></div>
+
+              <button
+                type="submit"
+                disabled={(!input.trim() && attachments.length === 0) || isUploading}
+                className="w-10 h-10 bg-gradient-to-r from-blue-300 to-purple-400 hover:from-blue-400 hover:to-purple-500 disabled:from-gray-300 disabled:to-gray-400 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl group"
+              >
+                {isUploading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4 text-white group-hover:translate-x-0.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -343,6 +353,12 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
         onChange={handleFileUpload}
         className="hidden"
       />
+      
+      {/* AI免责声明 */}
+      <div className="text-center mt-3">
+        <p className="text-xs text-gray-400">AI-generated, for reference only</p>
+      </div>
+      </div>
     </div>
   );
 };
