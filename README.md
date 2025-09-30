@@ -204,13 +204,13 @@ cd client && npm install
 
 #### 1. 健康检查
 ```bash
-GET /api/health
-# 响应: {"status": "OK", "timestamp": "...", "uptime": 1234.567}
+GET /api/v1/health/
+# 响应: {"status": "OK", "timestamp": "...", "uptime": "运行中"}
 ```
 
 #### 2. 聊天对话
 ```bash
-POST /api/chat
+POST /api/v1/chat/stream
 {
   "message": "用户消息内容",
   "conversationId": "对话ID",
@@ -220,13 +220,13 @@ POST /api/chat
 
 #### 3. 文件上传
 ```bash
-POST /api/upload
+POST /api/v1/files/upload
 # 支持: PDF, DOC, DOCX, TXT, MD (最大10MB)
 ```
 
 #### 4. 网页分析
 ```bash
-POST /api/analyze-url
+POST /api/v1/files/analyze-url
 {"url": "https://example.com"}
 ```
 
@@ -234,15 +234,15 @@ POST /api/analyze-url
 
 ```bash
 # 普通对话
-curl -X POST http://localhost:3001/api/chat \
+curl -X POST http://localhost:3001/api/v1/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "你好，请介绍一下自己", "conversationId": "conv_001"}'
 
 # 文件分析
-curl -X POST http://localhost:3001/api/upload -F "file=@document.pdf"
+curl -X POST http://localhost:3001/api/v1/files/upload -F "file=@document.pdf"
 
 # 网页分析
-curl -X POST http://localhost:3001/api/analyze-url \
+curl -X POST http://localhost:3001/api/v1/files/analyze-url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 ```

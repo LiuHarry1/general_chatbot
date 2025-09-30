@@ -124,7 +124,7 @@ export const uploadFile = async (file: File): Promise<{ content: string }> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/upload`, {
+  const response = await fetch(`${API_BASE_URL}/v1/files/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -137,7 +137,7 @@ export const uploadFile = async (file: File): Promise<{ content: string }> => {
 };
 
 export const analyzeUrl = async (url: string): Promise<{ content: string; title?: string }> => {
-  const response = await fetch(`${API_BASE_URL}/analyze-url`, {
+  const response = await fetch(`${API_BASE_URL}/v1/files/analyze-url`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
