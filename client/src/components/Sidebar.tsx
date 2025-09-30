@@ -1,6 +1,6 @@
 import React from 'react';
 import { Conversation } from '../types';
-import { Plus, MessageSquare, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Sparkles, Bot, Star, Clock, MoreHorizontal } from 'lucide-react';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -29,74 +29,150 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-80 sidebar">
+    <div className="w-80 sidebar bg-white border-r border-gray-200 flex flex-col h-full">
+      {/* Logo和标题区域 */}
       <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+            <Bot className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">AI助手</h1>
+            <p className="text-xs text-gray-500">智能对话伙伴</p>
+          </div>
+        </div>
+        
+        {/* 新对话按钮 */}
         <button
           onClick={onNewConversation}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
         >
-          <Plus className="w-5 h-5" />
-          <span>新建对话</span>
+          <Sparkles className="w-5 h-5" />
+          <span className="font-medium">开始新对话</span>
         </button>
       </div>
 
+      {/* 快速功能区域 */}
+      <div className="p-4 border-b border-gray-100">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          快速功能
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+            <MessageSquare className="w-4 h-4" />
+            <span>文档分析</span>
+          </button>
+          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+            <Sparkles className="w-4 h-4" />
+            <span>创意写作</span>
+          </button>
+          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+            <Bot className="w-4 h-4" />
+            <span>代码助手</span>
+          </button>
+          <button className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+            <MoreHorizontal className="w-4 h-4" />
+            <span>更多</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 对话历史区域 */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">
-            最近对话
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center space-x-2">
+              <Clock className="w-4 h-4" />
+              <span>对话历史</span>
+            </h3>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+              {conversations.length}
+            </span>
+          </div>
           
-          <div className="space-y-2">
-            {conversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
-                  currentConversationId === conversation.id
-                    ? 'bg-primary-50 border border-primary-200'
-                    : 'hover:bg-gray-50'
-                }`}
-                onClick={() => onSelectConversation(conversation.id)}
-              >
-                <div className="flex items-start space-x-3">
-                  <MessageSquare className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {conversation.title}
-                    </p>
-                    {conversation.lastMessage && (
-                      <p className="text-xs text-gray-600 truncate mt-1">
-                        {conversation.lastMessage}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      {formatDate(conversation.updatedAt as Date)}
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteConversation(conversation.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all"
-                  >
-                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
-                  </button>
-                </div>
+          <div className="space-y-1">
+            {conversations.length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500 mb-2">还没有对话记录</p>
+                <p className="text-xs text-gray-400">点击上方按钮开始新对话</p>
               </div>
-            ))}
+            ) : (
+              conversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                    currentConversationId === conversation.id
+                      ? 'bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 shadow-sm'
+                      : 'hover:bg-gray-50 hover:shadow-sm'
+                  }`}
+                  onClick={() => onSelectConversation(conversation.id)}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      currentConversationId === conversation.id
+                        ? 'bg-gradient-to-br from-blue-500 to-purple-600'
+                        : 'bg-gray-100 group-hover:bg-gray-200'
+                    }`}>
+                      <MessageSquare className={`w-4 h-4 ${
+                        currentConversationId === conversation.id
+                          ? 'text-white'
+                          : 'text-gray-500'
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {conversation.title}
+                        </p>
+                        {(conversation.messageCount || 0) > 0 && (
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {conversation.messageCount}
+                          </span>
+                        )}
+                      </div>
+                      {conversation.lastMessage && (
+                        <p className="text-xs text-gray-600 truncate mt-1">
+                          {conversation.lastMessage}
+                        </p>
+                      )}
+                      <div className="flex items-center space-x-2 mt-1">
+                        <Clock className="w-3 h-3 text-gray-400" />
+                        <p className="text-xs text-gray-500">
+                          {formatDate(conversation.updatedAt as Date)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteConversation(conversation.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 rounded-lg transition-all duration-200"
+                    >
+                      <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      <div className="p-4 border-t border-gray-200">
+      {/* 用户信息区域 */}
+      <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-medium">U</span>
+          <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-xl flex items-center justify-center">
+            <Star className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">用户</p>
-            <p className="text-xs text-gray-500">在线</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">智能助手</p>
+            <p className="text-xs text-gray-500 flex items-center space-x-1">
+              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              <span>随时为您服务</span>
+            </p>
           </div>
         </div>
       </div>
