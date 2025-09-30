@@ -47,14 +47,18 @@ export const sendMessageStream = async (
   onMetadata: (metadata: { intent?: string; sources?: string[]; created_at?: Date }) => void,
   onError: (error: string) => void,
   onEnd: () => void,
-  onImage?: (image: { url: string; filename: string }) => void
+  onImage?: (image: { url: string; filename: string }) => void,
+  userId?: string
 ): Promise<void> => {
   const response = await fetch(`${API_BASE_URL}/v1/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify({
+      ...request,
+      user_id: userId || 'default_user'
+    }),
   });
 
   if (!response.ok) {

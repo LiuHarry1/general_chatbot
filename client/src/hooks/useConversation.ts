@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Conversation, ChatMessage } from '../types';
 import { DatabaseStorage } from '../utils/databaseStorage';
 
-export const useConversation = () => {
+export const useConversation = (userId?: string) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -15,9 +15,18 @@ export const useConversation = () => {
   // 初始化对话
   useEffect(() => {
     const initializeConversations = async () => {
+      if (!userId) {
+        // 如果没有用户ID，清空数据
+        setConversations([]);
+        setCurrentConversationId(null);
+        setMessages([]);
+        setIsLoading(false);
+        return;
+      }
+      
       setIsLoading(true);
       try {
-        const savedConversations = await DatabaseStorage.getConversations();
+        const savedConversations = await DatabaseStorage.getConversations(userId);
         
         if (savedConversations.length > 0) {
           setConversations(savedConversations);
@@ -27,22 +36,16 @@ export const useConversation = () => {
           setMessages(firstConversationMessages);
         } else {
           // 创建默认对话
-          const defaultConversation = await DatabaseStorage.createConversation('New Conversation');
+          const defaultConversation = await DatabaseStorage.createConversation('New Conversation', userId);
           setConversations([defaultConversation]);
           setCurrentConversationId(defaultConversation.id);
           setMessages([]);
         }
       } catch (error) {
         console.error('初始化对话失败:', error);
-        // 如果数据库操作失败，创建本地默认对话
-        const defaultConversation: Conversation = {
-          id: Date.now().toString(),
-          title: 'New Conversation',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        setConversations([defaultConversation]);
-        setCurrentConversationId(defaultConversation.id);
+        // 如果数据库操作失败，显示空状态
+        setConversations([]);
+        setCurrentConversationId(null);
         setMessages([]);
       } finally {
         setIsLoading(false);
@@ -50,31 +53,23 @@ export const useConversation = () => {
     };
 
     initializeConversations();
-  }, []);
+  }, [userId]);
 
   // 创建新对话
   const createNewConversation = useCallback(async () => {
+    if (!userId) return;
+    
     try {
-      const newConversation = await DatabaseStorage.createConversation('New Conversation');
+      const newConversation = await DatabaseStorage.createConversation('New Conversation', userId);
       setConversations(prev => [newConversation, ...prev]);
       setCurrentConversationId(newConversation.id);
       setMessages([]);
       return newConversation;
     } catch (error) {
       console.error('创建对话失败:', error);
-      // 如果数据库操作失败，创建本地对话
-      const fallbackConversation: Conversation = {
-        id: Date.now().toString(),
-        title: 'New Conversation',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      setConversations(prev => [fallbackConversation, ...prev]);
-      setCurrentConversationId(fallbackConversation.id);
-      setMessages([]);
-      return fallbackConversation;
+      throw error; // 直接抛出错误，让调用者处理
     }
-  }, []);
+  }, [userId]);
 
   // 选择对话
   const selectConversation = useCallback(async (conversationId: string) => {
@@ -109,8 +104,8 @@ export const useConversation = () => {
 
   // 添加消息
   const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'created_at'>) => {
-    if (!currentConversationId) {
-      console.error('没有当前对话ID');
+    if (!currentConversationId || !userId) {
+      console.error('没有当前对话ID或用户ID');
       return;
     }
 
@@ -129,16 +124,9 @@ export const useConversation = () => {
       return newMessage;
     } catch (error) {
       console.error('添加消息失败:', error);
-      // 如果数据库操作失败，创建本地消息
-      const fallbackMessage: ChatMessage = {
-        ...message,
-        id: Date.now().toString(),
-        created_at: new Date()
-      };
-      setMessages(prev => [...prev, fallbackMessage]);
-      return fallbackMessage;
+      throw error; // 直接抛出错误，让调用者处理
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, userId]);
 
   // 更新消息
   const updateMessage = useCallback(async (messageId: string, updates: Partial<ChatMessage>, saveToDatabase: boolean = true) => {
@@ -169,7 +157,13 @@ export const useConversation = () => {
         return updatedMessage;
       } catch (error) {
         console.error('更新消息失败:', error);
-        // 数据库更新失败时，本地状态已经更新，不需要额外处理
+        // 数据库更新失败时，回滚本地状态
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId ? { ...msg, ...updates } : msg
+          )
+        );
+        throw error;
       }
     }
     

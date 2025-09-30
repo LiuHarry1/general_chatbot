@@ -2,13 +2,18 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import InputArea from './components/InputArea';
-import { ChatMessage, Conversation, Attachment } from './types';
+import LoginForm from './components/LoginForm';
+import { ChatMessage, Conversation, Attachment, User } from './types';
 import { sendMessageStream } from './services/api';
 import { useConversation } from './hooks/useConversation';
+import { useAuth } from './hooks/useAuth';
 
 const App: React.FC = () => {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [currentAttachments, setCurrentAttachments] = useState<Attachment[]>([]);
+  
+  // 使用认证管理hook
+  const { user, isAuthenticated, isLoading: authLoading, login, logout } = useAuth();
   
   // 使用对话管理hook
   const {
@@ -23,7 +28,7 @@ const App: React.FC = () => {
     addMessage,
     updateMessage,
     updateConversation
-  } = useConversation();
+  } = useConversation(user?.id);
 
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
@@ -42,6 +47,11 @@ const App: React.FC = () => {
       attachments: messageAttachments
     });
 
+    if (!userMessage) {
+      console.error('添加用户消息失败');
+      return;
+    }
+
     // 创建AI消息的初始状态
     const botMessage = await addMessage({
       role: 'assistant',
@@ -51,6 +61,11 @@ const App: React.FC = () => {
       isTyping: true  // 标记为正在输入状态
     });
 
+    if (!botMessage) {
+      console.error('创建AI消息失败');
+      return;
+    }
+
     // 用于累积流式内容
     let accumulatedContent = '';
     
@@ -59,8 +74,7 @@ const App: React.FC = () => {
         {
           message: content,
           conversationId: currentConversationId || '1',
-          attachments: messageAttachments,
-          user_id: 'default_user' // 用户ID现在由后端处理
+          attachments: messageAttachments
         },
         // onChunk - 处理内容块
         (chunk: string) => {
@@ -121,7 +135,9 @@ const App: React.FC = () => {
               isTyping: true // 继续loading，等待更多内容
             }, false); // 不保存到数据库，只更新本地状态
           }
-        }
+        },
+        // userId - 传递用户ID
+        user?.id
       );
       
       // 更新对话标题（如果是第一条消息）
@@ -150,8 +166,13 @@ const App: React.FC = () => {
   };
 
   const handleNewConversation = async () => {
-    await createNewConversation();
-    setCurrentAttachments([]); // 新对话时清空附件
+    try {
+      await createNewConversation();
+      setCurrentAttachments([]); // 新对话时清空附件
+    } catch (error) {
+      console.error('创建新对话失败:', error);
+      // 可以显示错误提示给用户
+    }
   };
 
   const handleSelectConversation = async (conversationId: string) => {
@@ -162,6 +183,33 @@ const App: React.FC = () => {
   const handleDeleteConversation = async (conversationId: string) => {
     await deleteConversation(conversationId);
   };
+
+  const handleLogin = (userData: User) => {
+    login(userData);
+    // 登录后重新初始化对话数据
+    // useConversation hook 会自动根据新的 userId 重新加载数据
+  };
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  // 如果正在加载认证状态，显示加载界面
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 如果未登录，显示登录界面
+  if (!isAuthenticated) {
+    return <LoginForm onLogin={handleLogin} />;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -190,9 +238,20 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">U</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-medium">
+                  {user?.username?.charAt(0).toUpperCase() || 'U'}
+                </span>
+              </div>
+              <span className="text-sm text-gray-700">{user?.username}</span>
             </div>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              退出
+            </button>
           </div>
         </div>
 

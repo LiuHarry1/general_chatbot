@@ -20,13 +20,33 @@ export class DatabaseStorage {
    * 获取用户ID
    */
   private static getUserId(): string {
-    let userId = localStorage.getItem('chatbot_user_id');
-    if (!userId) {
-      // 使用固定的默认用户ID，确保对话历史记录不会丢失
-      userId = 'default_user';
-      localStorage.setItem('chatbot_user_id', userId);
+    // 从当前用户状态获取用户ID，不再使用本地存储
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        return userData.id;
+      } catch (error) {
+        console.error('解析用户数据失败:', error);
+      }
     }
-    return userId;
+    return 'default_user';
+  }
+
+  /**
+   * 获取当前用户ID（从localStorage）
+   */
+  private static getCurrentUserId(): string {
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        return userData.id;
+      } catch (error) {
+        console.error('解析用户数据失败:', error);
+      }
+    }
+    return 'default_user';
   }
 
   /**
@@ -56,10 +76,10 @@ export class DatabaseStorage {
   /**
    * 获取对话列表
    */
-  static async getConversations(): Promise<Conversation[]> {
+  static async getConversations(userId?: string): Promise<Conversation[]> {
     try {
-      const userId = this.getUserId();
-      const conversations = await getConversations(userId);
+      const currentUserId = userId || this.getUserId();
+      const conversations = await getConversations(currentUserId);
       
       // 转换日期格式和字段名
       return conversations.map((conv): Conversation => ({
@@ -80,10 +100,10 @@ export class DatabaseStorage {
   /**
    * 创建新对话
    */
-  static async createConversation(title: string = 'New Conversation'): Promise<Conversation> {
+  static async createConversation(title: string = 'New Conversation', userId?: string): Promise<Conversation> {
     try {
-      const userId = this.getUserId();
-      const conversation = await createConversation(title, userId);
+      const currentUserId = userId || this.getUserId();
+      const conversation = await createConversation(title, currentUserId);
       
       return {
         id: conversation.id,

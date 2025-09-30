@@ -47,6 +47,22 @@ export interface ApiResponse {
   created_at?: Date;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  loginTime: Date;
+}
+
+export interface LoginRequest {
+  username: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  user?: User;
+  message?: string;
+}
+
 export interface IntentIndicator {
   type: 'file' | 'web' | 'search' | 'normal';
   label: string;
