@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from models import ChatRequest, ChatResponse
-from services.enhanced_chat_service import enhanced_chat_service
+from services.chat_service import enhanced_chat_service
 from services.ai_service import ai_service
 from utils.logger import app_logger
 

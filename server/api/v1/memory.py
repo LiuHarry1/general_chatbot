@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
-from memory_simple import default_memory_manager as memory_manager
-from memory_simple.short_term_memory import short_term_memory
+from memory import default_memory_manager as memory_manager
+from memory.short_term_memory import short_term_memory
 from utils.logger import app_logger
 
 # 创建路由器

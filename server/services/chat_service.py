@@ -8,10 +8,10 @@ from typing import List, Dict, Any, Optional, AsyncGenerator, Tuple
 
 from utils.logger import app_logger
 from services.ai_service import ai_service
-from services.enhanced_intent_service import llm_based_intent_service, IntentType
+from services.intent_service import llm_based_intent_service, IntentType
 from services.code_execution_service import code_execution_service
-from memory_simple import default_memory_manager as memory_manager
-from memory_simple.short_term_memory import ShortTermMemoryManager
+from memory import default_memory_manager as memory_manager
+from memory.short_term_memory import ShortTermMemoryManager
 
 
 class EnhancedChatService:

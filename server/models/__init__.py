@@ -2,7 +2,7 @@
 统一模型定义
 导出所有API和数据库模型
 """
-from .api_models import (
+from .schemas import (
     ChatRequest,
     ChatResponse,
     FileUploadResponse,
