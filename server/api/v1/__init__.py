@@ -17,7 +17,7 @@ router = APIRouter()
 router.include_router(chat_router, prefix="/chat", tags=["chat"])
 router.include_router(memory_router, prefix="/memory", tags=["memory"])
 router.include_router(files_router, prefix="/files", tags=["files"])
-router.include_router(health_router, prefix="/health", tags=["health"])
+router.include_router(health_router, tags=["health"])
 router.include_router(database_router, tags=["database"])
 router.include_router(images_router, prefix="/images", tags=["images"])
 

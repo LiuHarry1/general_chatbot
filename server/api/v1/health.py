@@ -12,7 +12,7 @@ from utils.logger import app_logger
 router = APIRouter()
 
 
-@router.get("/", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse)
 async def health_check():
     """健康检查端点"""
     return HealthResponse(

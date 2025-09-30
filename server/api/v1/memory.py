@@ -154,7 +154,7 @@ async def clear_short_term_memory(user_id: str):
         raise HTTPException(status_code=500, detail="清空短期记忆失败")
 
 
-@router.get("/health")
+@router.get("/memory/health")
 async def memory_health_check():
     """记忆系统健康检查"""
     try:
