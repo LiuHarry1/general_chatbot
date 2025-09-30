@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional, AsyncGenerator, Tuple
 from utils.logger import app_logger
 from services.ai_service import ai_service
 from services.intent_service import llm_based_intent_service, IntentType
-from services.code_execution_service import code_execution_service
+from services.code_executor import code_execution_service
 from memory import default_memory_manager as memory_manager
 from memory.short_term_memory import ShortTermMemoryManager
 
