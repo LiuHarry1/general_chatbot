@@ -1,4 +1,5 @@
 import { SendMessageRequest, ApiResponse, Conversation, ChatMessage } from '../types';
+import { API_CONSTANTS } from '../constants';
 
 // API响应的原始数据类型（包含字符串日期）
 interface ConversationApiResponse {
@@ -23,7 +24,6 @@ interface MessageApiResponse {
   created_at: string;
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 export const sendMessageStream = async (
   request: SendMessageRequest,
@@ -34,7 +34,7 @@ export const sendMessageStream = async (
   onImage?: (image: { url: string; filename: string }) => void,
   userId?: string
 ): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/v1/chat/stream`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ export const uploadFile = async (file: File): Promise<{ content: string }> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/v1/files/upload`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/files/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -125,7 +125,7 @@ export const uploadFile = async (file: File): Promise<{ content: string }> => {
 };
 
 export const analyzeUrl = async (url: string): Promise<{ content: string; title?: string }> => {
-  const response = await fetch(`${API_BASE_URL}/v1/files/analyze-url`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/files/analyze-url`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ export const analyzeUrl = async (url: string): Promise<{ content: string; title?
 
 // 数据库API调用 - 对话管理
 export const createConversation = async (title: string, userId: string = 'default_user'): Promise<ConversationApiResponse> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/conversations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ export const createConversation = async (title: string, userId: string = 'defaul
 };
 
 export const getConversations = async (userId: string = 'default_user'): Promise<ConversationApiResponse[]> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations?user_id=${userId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/conversations?user_id=${userId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -173,7 +173,7 @@ export const getConversations = async (userId: string = 'default_user'): Promise
 };
 
 export const getConversation = async (conversationId: string): Promise<ConversationApiResponse> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations/${conversationId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/conversations/${conversationId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -188,7 +188,7 @@ export const getConversation = async (conversationId: string): Promise<Conversat
 };
 
 export const updateConversation = async (conversationId: string, title: string): Promise<ConversationApiResponse> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations/${conversationId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/conversations/${conversationId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -204,7 +204,7 @@ export const updateConversation = async (conversationId: string, title: string):
 };
 
 export const deleteConversation = async (conversationId: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/conversations/${conversationId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/conversations/${conversationId}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -226,7 +226,7 @@ export const createMessage = async (message: {
   attachments?: any[];
   is_typing?: boolean;
 }): Promise<MessageApiResponse> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/messages`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -242,7 +242,7 @@ export const createMessage = async (message: {
 };
 
 export const getMessages = async (conversationId: string): Promise<MessageApiResponse[]> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/messages/conversations/${conversationId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/messages/conversations/${conversationId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -263,7 +263,7 @@ export const updateMessage = async (messageId: string, updates: {
   attachments?: any[];
   is_typing?: boolean;
 }): Promise<MessageApiResponse> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/messages/${messageId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/messages/${messageId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ export const updateMessage = async (messageId: string, updates: {
 };
 
 export const deleteMessage = async (messageId: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/v1/db/messages/${messageId}`, {
+  const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/db/messages/${messageId}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',

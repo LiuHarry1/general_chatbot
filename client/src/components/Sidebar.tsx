@@ -1,6 +1,8 @@
 import React from 'react';
 import { Conversation } from '../types';
 import { MessageSquare, Trash2, Bot, Star, Clock, ChevronRight, PanelLeftClose } from 'lucide-react';
+import { formatDate } from '../utils/helpers';
+import { UI_CONSTANTS } from '../constants';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -21,16 +23,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse
 }) => {
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days} days ago`;
-    return date.toLocaleDateString();
-  };
 
   return (
     <div className={`${isCollapsed ? 'w-16' : 'w-64'} sidebar bg-white/95 backdrop-blur-sm border-r border-gray-200/60 flex flex-col h-full shadow-xl transition-all duration-300`}>

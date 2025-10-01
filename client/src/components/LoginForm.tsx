@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { LogIn, User as UserIcon } from 'lucide-react';
+import { UI_CONSTANTS } from '../constants';
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
@@ -72,7 +73,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                 className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="请输入用户名"
                 disabled={isLoading}
-                maxLength={50}
+                maxLength={UI_CONSTANTS.MAX_USERNAME_LENGTH}
               />
             </div>
           </div>

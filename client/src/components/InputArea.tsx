@@ -2,6 +2,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Attachment, FileAttachment, UrlAttachment } from '../types';
 import { Paperclip, X, FileText, Globe } from 'lucide-react';
 import { uploadFile, analyzeUrl } from '../services/api';
+import { UI_CONSTANTS, SUGGESTED_ACTIONS } from '../constants';
+import { formatFileSize, generateId, detectUrls, debounce } from '../utils/helpers';
 
 interface InputAreaProps {
   onSendMessage: (content: string, attachments?: Attachment[]) => void;
@@ -44,7 +46,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
         const response = await uploadFile(file);
         const newAttachment: Attachment = {
           type: 'file',
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          id: generateId(),
           data: {
             name: file.name,
             size: file.size,
@@ -75,7 +77,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
       const response = await analyzeUrl(targetUrl);
       const newAttachment: Attachment = {
         type: 'url',
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         data: {
           url: targetUrl,
           title: response.title,
@@ -100,7 +102,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
   const adjustTextareaHeight = useCallback(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, UI_CONSTANTS.MAX_TEXTAREA_HEIGHT)}px`;
     }
   }, []);
 
@@ -114,38 +116,11 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     const fileCount = attachments.filter(att => att.type === 'file').length;
     
     if (hasFiles && hasUrls) {
-      // 混合类型：文件和网页
-      return [
-        "综合分析所有内容",
-        "对比这些文档和网页的异同",
-        "总结所有材料的主要观点",
-        "生成综合报告"
-      ];
+      return SUGGESTED_ACTIONS.MIXED;
     } else if (hasFiles) {
-      // 只有文件
-      if (fileCount > 1) {
-        return [
-          "对比分析这些文档",
-          "总结所有文档的共同点",
-          "生成综合分析报告",
-          "找出文档间的关联性"
-        ];
-      } else {
-        return [
-          "详细总结这篇文档内容",
-          "用通俗易懂的话，说说文档讲了什么",
-          "生成脑图",
-          "生成播客"
-        ];
-      }
+      return fileCount > 1 ? SUGGESTED_ACTIONS.MULTIPLE_FILES : SUGGESTED_ACTIONS.SINGLE_FILE;
     } else if (hasUrls) {
-      // 只有网页
-      return [
-        "详细总结这个网页内容",
-        "用通俗易懂的话，说说网页讲了什么",
-        "参考网页写一篇原创内容",
-        "生成播客"
-      ];
+      return SUGGESTED_ACTIONS.URLS;
     }
     
     return [];
@@ -157,10 +132,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
 
   // 检测输入中的链接
   const detectAndProcessLinks = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const urls = text.match(urlRegex);
+    const urls = detectUrls(text);
     
-    if (urls && urls.length > 0) {
+    if (urls.length > 0) {
       // 自动处理第一个链接
       const url = urls[0];
       if (!attachments.some(att => att.type === 'url' && (att.data as UrlAttachment).url === url)) {
@@ -169,6 +143,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     }
   };
 
+  // 防抖的链接检测
+  const debouncedLinkDetection = debounce(detectAndProcessLinks, UI_CONSTANTS.URL_DETECTION_DELAY);
+
   // 监听输入变化，检测链接
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -176,9 +153,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     
     // 检测链接（延迟检测，避免频繁处理）
     if (value.includes('http')) {
-      setTimeout(() => {
-        detectAndProcessLinks(value);
-      }, 1000);
+      debouncedLinkDetection(value);
     }
   };
 
@@ -212,7 +187,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {attachment.type === 'file' 
-                          ? `PDF · ${Math.round(((attachment.data as FileAttachment)?.size || 0) / 1024 / 1024 * 10) / 10}MB · 约${Math.round(((attachment.data as FileAttachment)?.content?.length || 0) / 1000)}千字`
+                          ? `PDF · ${formatFileSize((attachment.data as FileAttachment)?.size || 0)} · 约${Math.round(((attachment.data as FileAttachment)?.content?.length || 0) / 1000)}千字`
                           : '链接'
                         }
                       </div>

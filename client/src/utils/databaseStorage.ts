@@ -6,13 +6,11 @@ import { Conversation, ChatMessage } from '../types';
 import {
   createConversation,
   getConversations,
-  getConversation,
   updateConversation,
   deleteConversation,
   createMessage,
   getMessages,
-  updateMessage,
-  deleteMessage
+  updateMessage
 } from '../services/api';
 
 export class DatabaseStorage {
@@ -103,28 +101,6 @@ export class DatabaseStorage {
     }
   }
 
-  /**
-   * 获取单个对话
-   */
-  static async getConversation(conversationId: string): Promise<Conversation | null> {
-    try {
-      const conversation = await getConversation(conversationId);
-      if (!conversation) return null;
-      
-      return {
-        id: conversation.id,
-        title: conversation.title,
-        createdAt: this.parseDate(conversation.createdAt),
-        updatedAt: this.parseDate(conversation.updatedAt),
-        messageCount: conversation.messageCount || 0,
-        lastMessage: conversation.lastMessage,
-        lastMessageTime: conversation.lastMessageTime ? this.parseDate(conversation.lastMessageTime) : undefined
-      };
-    } catch (error) {
-      console.error('获取对话失败:', error);
-      return null;
-    }
-  }
 
   /**
    * 更新对话标题
@@ -262,56 +238,4 @@ export class DatabaseStorage {
     }
   }
 
-  /**
-   * 删除消息
-   */
-  static async deleteMessage(messageId: string): Promise<void> {
-    try {
-      await deleteMessage(messageId);
-    } catch (error) {
-      console.error('删除消息失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 清空所有数据（删除所有对话）
-   */
-  static async clearAll(): Promise<void> {
-    try {
-      const conversations = await this.getConversations();
-      
-      // 删除所有对话（这会级联删除相关消息）
-      await Promise.all(
-        conversations.map(conv => this.deleteConversation(conv.id))
-      );
-    } catch (error) {
-      console.error('清空数据失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 获取存储使用情况
-   */
-  static async getStorageInfo(): Promise<{ conversations: number; totalMessages: number }> {
-    try {
-      const conversations = await this.getConversations();
-      let totalMessages = 0;
-      
-      // 统计所有对话的消息数量
-      for (const conv of conversations) {
-        const messages = await this.getMessages(conv.id);
-        totalMessages += messages.length;
-      }
-      
-      return {
-        conversations: conversations.length,
-        totalMessages
-      };
-    } catch (error) {
-      console.error('获取存储信息失败:', error);
-      return { conversations: 0, totalMessages: 0 };
-    }
-  }
 }
