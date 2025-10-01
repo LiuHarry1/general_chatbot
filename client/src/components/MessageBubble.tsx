@@ -3,7 +3,7 @@ import { ChatMessage } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Globe, FileText, MessageCircle, Search, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -39,44 +39,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     if (liked) setLiked(false);
   };
 
-  const getIntentIcon = (intent?: string) => {
-    switch (intent) {
-      case 'web':
-        return <Globe className="w-4 h-4" />;
-      case 'file':
-        return <FileText className="w-4 h-4" />;
-      case 'search':
-        return <Search className="w-4 h-4" />;
-      default:
-        return <MessageCircle className="w-4 h-4" />;
-    }
-  };
-
-  const getIntentColor = (intent?: string) => {
-    switch (intent) {
-      case 'web':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'file':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'search':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getIntentText = (intent?: string) => {
-    switch (intent) {
-      case 'web':
-        return '网页分析';
-      case 'file':
-        return '文档分析';
-      case 'search':
-        return '网络搜索';
-      default:
-        return '对话';
-    }
-  };
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -90,15 +52,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           /* AI消息样式 */
           <div className="flex justify-start group">
             <div className="flex-1">
-              {/* 意图标签 */}
-              {message.intent && (
-                <div className="flex items-center space-x-2 mb-3">
-                  <div className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getIntentColor(message.intent)}`}>
-                    {getIntentIcon(message.intent)}
-                    <span>{getIntentText(message.intent)}</span>
-                  </div>
-                </div>
-              )}
               
               {/* 消息内容 */}
               <div className="bg-white rounded-2xl rounded-tl-md">

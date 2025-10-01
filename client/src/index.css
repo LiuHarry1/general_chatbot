@@ -86,25 +86,6 @@
     @apply transform scale-105 shadow-sm;
   }
   
-  .intent-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-  }
-  
-  .intent-web {
-    @apply bg-green-100 text-green-800;
-  }
-  
-  .intent-file {
-    @apply bg-blue-100 text-blue-800;
-  }
-  
-  .intent-search {
-    @apply bg-purple-100 text-purple-800;
-  }
-  
-  .intent-normal {
-    @apply bg-gray-100 text-gray-800;
-  }
 
   .input-button {
     @apply p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all duration-200 disabled:opacity-50;

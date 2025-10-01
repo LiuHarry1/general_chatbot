@@ -55,10 +55,7 @@ const App: React.FC = () => {
     // 保存添加用户消息前的消息数量，用于判断是否需要更新对话标题
     const messagesBeforeUserMessage = messages;
     
-    // 如果是新对话，发送消息后将其标记为非新对话
-    if (isNewConversation) {
-      setIsNewConversation(false);
-    }
+    // 注意：不在这里手动设置 isNewConversation，让 useEffect 统一管理
 
     // 添加用户消息到数据库
     const userMessage = await addMessage({
@@ -200,7 +197,7 @@ const App: React.FC = () => {
   const handleSelectConversation = async (conversationId: string) => {
     await selectConversation(conversationId);
     setCurrentAttachments([]); // 切换对话时清空附件
-    setIsNewConversation(false); // 选择已有对话，不是新对话
+    // 注意：不在这里手动设置 isNewConversation，让 useEffect 统一管理
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -236,19 +233,26 @@ const App: React.FC = () => {
     };
   }, [userDropdownOpen]);
 
-  // 监听消息变化，如果有消息则不是新对话
+  // 监听消息和对话变化，统一管理新对话状态
   useEffect(() => {
-    if (messages.length > 0) {
-      setIsNewConversation(false);
-    }
-  }, [messages]);
+    // 使用 setTimeout 来避免快速状态切换导致的闪现
+    const timeoutId = setTimeout(() => {
+      // 如果没有对话，显示新对话界面
+      if (conversations.length === 0) {
+        setIsNewConversation(true);
+      }
+      // 如果有对话但没有当前对话ID，且没有消息，显示新对话界面
+      else if (!currentConversationId && messages.length === 0) {
+        setIsNewConversation(true);
+      }
+      // 如果有消息，则不是新对话
+      else if (messages.length > 0) {
+        setIsNewConversation(false);
+      }
+    }, 50); // 50ms 的延迟，足够避免闪现但不会影响用户体验
 
-  // 监听对话变化，如果没有对话则显示新对话界面
-  useEffect(() => {
-    if (conversations.length === 0) {
-      setIsNewConversation(true);
-    }
-  }, [conversations]);
+    return () => clearTimeout(timeoutId);
+  }, [conversations, currentConversationId, messages]);
 
   // 如果正在加载认证状态，显示加载界面
   if (authLoading) {
@@ -431,3 +435,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
