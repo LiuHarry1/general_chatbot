@@ -393,8 +393,8 @@ const App: React.FC = () => {
         {/* 聊天内容区域 */}
         <main className="flex-1 flex flex-col min-h-0">
           {isNewConversation ? (
-            // 新对话：输入框在中间
-            <div className="flex-1 flex flex-col items-center justify-center relative bg-white">
+            // 新对话：输入框在中间偏上
+            <div className="flex-1 flex flex-col items-center justify-start relative bg-white pt-20">
               <div className="w-full max-w-4xl px-8">
                 <div className="text-center mb-8">
                   {/* 图标 */}
