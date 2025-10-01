@@ -54,23 +54,6 @@ export interface User {
   loginTime: Date;
 }
 
-export interface LoginRequest {
-  username: string;
-}
-
-export interface LoginResponse {
-  success: boolean;
-  user?: User;
-  message?: string;
-}
-
-export interface IntentIndicator {
-  type: 'file' | 'web' | 'search' | 'normal';
-  label: string;
-  icon: string;
-  color: string;
-}
-
 export interface SendMessageRequest {
   message: string;
   conversationId: string;

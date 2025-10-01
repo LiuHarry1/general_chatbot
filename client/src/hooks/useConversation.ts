@@ -128,7 +128,7 @@ export const useConversation = (userId?: string) => {
     } catch (error) {
       console.error('删除对话失败:', error);
     }
-  }, [conversations, currentConversationId, selectConversation, createNewConversation]);
+  }, [conversations, currentConversationId, selectConversation]);
 
   // 添加消息
   const addMessage = useCallback(async (message: Omit<ChatMessage, 'id' | 'created_at'>) => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Conversation } from '../types';
-import { Plus, MessageSquare, Trash2, Sparkles, Bot, Star, Clock, MoreHorizontal, ChevronLeft, ChevronRight, PanelLeftClose } from 'lucide-react';
+import { MessageSquare, Trash2, Bot, Star, Clock, ChevronRight, PanelLeftClose } from 'lucide-react';
 
 interface SidebarProps {
   conversations: Conversation[];

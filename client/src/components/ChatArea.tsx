@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ChatMessage } from '../types';
 import MessageBubble from './MessageBubble';
-import TypingIndicator from './TypingIndicator';
 import { Bot, Sparkles, Search, FileText, Code, Lightbulb, Zap } from 'lucide-react';
 
 interface ChatAreaProps {

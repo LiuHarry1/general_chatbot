@@ -3,6 +3,7 @@
 集成智能意图识别、工具调用和长短期记忆
 """
 import json
+import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional, AsyncGenerator, Tuple
 
@@ -11,7 +12,6 @@ from services.ai_service import ai_service
 from services.intent_service import llm_based_intent_service, IntentType
 from services.code_executor import code_execution_service
 from memory import default_memory_manager as memory_manager
-from memory.short_term_memory import ShortTermMemoryManager
 
 
 class EnhancedChatService:
@@ -21,7 +21,16 @@ class EnhancedChatService:
         self.ai_service = ai_service
         self.intent_service = llm_based_intent_service
         self.memory_manager = memory_manager
-        self.short_term_memory = ShortTermMemoryManager()
+        # 延迟导入避免循环依赖
+        self._memory_service = None
+    
+    @property
+    def memory_service(self):
+        """懒加载记忆服务"""
+        if self._memory_service is None:
+            from services.memory_service import memory_service
+            self._memory_service = memory_service
+        return self._memory_service
     
     def extract_attachments_data(self, attachments) -> List[Dict[str, Any]]:
         """提取附件数据"""
@@ -31,18 +40,34 @@ class EnhancedChatService:
             
         for attachment in attachments:
             try:
-                # 处理Attachment对象
+                # 处理Attachment对象（Pydantic模型）
                 if hasattr(attachment, 'data') and hasattr(attachment, 'type'):
                     # 这是Attachment对象
-                    if attachment.data and attachment.data.get('content'):
+                    attachment_data = attachment.data
+                    # data可能是字典或对象
+                    if isinstance(attachment_data, dict):
+                        content = attachment_data.get('content')
+                    else:
+                        content = getattr(attachment_data, 'content', None) if hasattr(attachment_data, 'content') else None
+                    
+                    if content:
                         attachments_data.append({
-                            'filename': attachment.data.get('name', attachment.data.get('filename', 'unknown')),
-                            'content': attachment.data['content'],
+                            'filename': attachment_data.get('name') if isinstance(attachment_data, dict) else getattr(attachment_data, 'name', 'unknown'),
+                            'content': content,
                             'type': attachment.type
                         })
                 elif isinstance(attachment, dict):
-                    # 这是字典格式
-                    if attachment.get('content'):
+                    # 这是字典格式，可能有嵌套的data字段
+                    if 'data' in attachment and isinstance(attachment['data'], dict):
+                        # 嵌套格式：{type: 'url', data: {content: '...', ...}}
+                        if attachment['data'].get('content'):
+                            attachments_data.append({
+                                'filename': attachment['data'].get('name', attachment['data'].get('filename', 'unknown')),
+                                'content': attachment['data']['content'],
+                                'type': attachment.get('type', 'text')
+                            })
+                    elif attachment.get('content'):
+                        # 扁平格式：{type: 'url', content: '...', ...}
                         attachments_data.append({
                             'filename': attachment.get('filename', attachment.get('name', 'unknown')),
                             'content': attachment['content'],
@@ -54,7 +79,7 @@ class EnhancedChatService:
                 
         return attachments_data
     
-    async def extract_user_context(self, message: str, user_id: str) -> Tuple[Dict[str, Any], str, str, List[Dict]]:
+    async def extract_user_context(self, message: str, user_id: str, conversation_id: str) -> Tuple[Dict[str, Any], str, str, List[Dict]]:
         """提取用户上下文信息（集成长短期记忆）"""
         try:
             # 使用长短期记忆系统提取用户偏好和上下文
@@ -63,26 +88,61 @@ class EnhancedChatService:
             short_term_context = ""
             recent_conversations = []
             
-            # 从长期记忆获取用户信息
+            # 从长期记忆获取用户画像和相似历史对话
             try:
-                user_memories = await self.memory_manager.get_user_memories(user_id)
-                if user_memories:
-                    contextual_prompt += "\n\n用户历史信息：\n"
-                    for memory in user_memories[:5]:  # 取最近5条记忆
-                        contextual_prompt += f"- {memory}\n"
+                # 获取长期记忆上下文（包含用户画像和语义相似对话）
+                long_term_context, user_profile_data = await self.memory_service.get_long_term_context(
+                    user_id=user_id,
+                    current_message=message,
+                    limit=3
+                )
+                
+                if long_term_context:
+                    contextual_prompt += f"\n\n{long_term_context}\n"
+                
+                # 更新用户画像数据
+                if user_profile_data:
+                    user_profile = user_profile_data
+                    
             except Exception as e:
                 app_logger.error(f"获取长期记忆失败: {e}")
             
-            # 从短期记忆获取最近对话上下文
+            # 从数据库获取当前对话的短期记忆（智能压缩）
             try:
-                recent_conversations = self.short_term_memory.get_recent_conversations(user_id, limit=3)
-                if recent_conversations:
-                    short_term_context += "\n\n最近对话上下文：\n"
-                    for conv in recent_conversations:
-                        short_term_context += f"用户: {conv['user_message'][:100]}...\n"
-                        short_term_context += f"助手: {conv['ai_response'][:100]}...\n\n"
+                from database import message_repo
+                
+                # 获取所有消息
+                messages = message_repo.get_messages(conversation_id)
+                
+                # 使用智能压缩获取短期记忆上下文
+                compressed_context, metadata = await self.memory_service.get_short_term_context(
+                    conversation_id=conversation_id,
+                    messages=messages
+                )
+                
+                if compressed_context:
+                    short_term_context += f"\n\n{compressed_context}\n"
+                    
+                    # 记录压缩信息
+                    if metadata.get('compressed'):
+                        app_logger.info(
+                            f"短期记忆已压缩 - 原始:{metadata['total_messages']}条/"
+                            f"{metadata['total_tokens']}tokens, "
+                            f"压缩后:{metadata['compressed_tokens']}tokens, "
+                            f"压缩率:{metadata['compression_ratio']:.1%}"
+                        )
+                
+                # 构建用于意图识别的对话列表（使用最近的消息）
+                recent_messages = messages[-6:] if len(messages) > 6 else messages
+                for i in range(0, len(recent_messages), 2):
+                    if i + 1 < len(recent_messages):
+                        recent_conversations.append({
+                            'user_message': recent_messages[i]['content'],
+                            'ai_response': recent_messages[i+1]['content']
+                        })
+                        
             except Exception as e:
-                app_logger.error(f"获取短期记忆失败: {e}")
+                app_logger.error(f"从数据库获取对话历史失败: {e}")
             
             return user_profile, contextual_prompt, short_term_context, recent_conversations
             
@@ -90,22 +150,17 @@ class EnhancedChatService:
             app_logger.error(f"提取用户上下文失败: {e}")
             return {}, "", "", []
     
-    async def process_query_with_intent(self, message: str, attachments_data: List[Dict[str, Any]], user_id: str) -> Tuple[str, Optional[str], Optional[str], List[str], str]:
+    async def process_query_with_intent(self, message: str, attachments_data: List[Dict[str, Any]], user_id: str, conversation_id: str) -> Tuple[str, Optional[str], Optional[str], List[str], str]:
         """使用增强意图识别处理查询"""
         # 提取用户上下文（包含最近对话历史）
-        user_profile, contextual_prompt, short_term_context, recent_conversations = await self.extract_user_context(message, user_id)
+        user_profile, contextual_prompt, short_term_context, recent_conversations = await self.extract_user_context(message, user_id, conversation_id)
         
-        # 使用增强意图识别服务（传入最近对话历史）
-        intent_result, _, _, _ = await self.intent_service.process_with_memory(
-            message, attachments_data, user_id
-        )
-        
-        # 手动传入最近对话历史到意图识别
-        intent_result_with_history = await self.intent_service.process_intent(
+        # 使用意图识别服务（传入最近对话历史）
+        intent_result = await self.intent_service.process_intent(
             message, attachments_data, user_id, recent_conversations
         )
         
-        app_logger.info(f"意图识别结果 - 意图: {intent_result_with_history.intent.value}, 置信度: {intent_result_with_history.confidence}, 推理: {intent_result_with_history.reasoning}")
+        app_logger.info(f"意图识别结果 - 意图: {intent_result.intent.value}, 置信度: {intent_result.confidence}, 推理: {intent_result.reasoning}")
         
         # 根据意图结果准备参数
         file_content = None
@@ -113,20 +168,20 @@ class EnhancedChatService:
         search_results = None
         sources = []
         
-        if intent_result_with_history.intent == IntentType.FILE:
-            file_content = intent_result_with_history.content
-        elif intent_result_with_history.intent == IntentType.WEB:
-            web_content = intent_result_with_history.content
-        elif intent_result_with_history.intent == IntentType.SEARCH:
-            search_results = intent_result_with_history.search_results
+        if intent_result.intent == IntentType.FILE:
+            file_content = intent_result.content
+        elif intent_result.intent == IntentType.WEB:
+            web_content = intent_result.content
+        elif intent_result.intent == IntentType.SEARCH:
+            search_results = intent_result.search_results
             # 提取搜索来源
             if search_results and search_results.get("results"):
                 sources = [result["url"] for result in search_results["results"]]
-        elif intent_result_with_history.intent == IntentType.CODE:
+        elif intent_result.intent == IntentType.CODE:
             # 代码执行功能
             pass
         
-        return intent_result_with_history.intent.value, file_content, web_content, search_results, sources, intent_result_with_history.reasoning
+        return intent_result.intent.value, file_content, web_content, search_results, sources, intent_result.reasoning
     
     async def generate_stream_response(self, message: str, intent: str, file_content: Optional[str], 
                                      web_content: Optional[str], search_results: Optional[Dict[str, Any]], 
@@ -266,46 +321,48 @@ class EnhancedChatService:
         
         return ""
     
-    async def save_conversation_to_memory(self, user_id: str, message: str, response: str, 
-                                        intent: str, sources: List[str]):
-        """保存对话到长短期记忆"""
+    async def save_conversation_to_memory(self, user_id: str, conversation_id: str, message: str, 
+                                        response: str, intent: str, sources: List[str]):
+        """
+        保存对话到记忆系统
+        - 短期记忆：已在数据库中，自动智能压缩
+        - 长期记忆：异步提取用户偏好和保存重要情景
+        """
         try:
-            # 保存到短期记忆
-            self.short_term_memory.add_conversation(
-                user_id=user_id,
-                user_message=message,
-                ai_response=response,
-                intent=intent,
-                sources=sources
+            # 使用异步任务更新记忆系统（不阻塞主流程）
+            asyncio.create_task(
+                self.memory_service.update_memories_async(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message=message,
+                    response=response,
+                    intent=intent,
+                    sources=sources
+                )
             )
             
-            # 保存到长期记忆
-            await self.memory_manager.add_memory(
-                user_id=user_id,
-                memory_text=f"用户问: {message[:100]}... 助手回答: {response[:100]}...",
-                metadata={"intent": intent, "sources": sources}
-            )
-            
-            app_logger.info(f"对话已保存到长短期记忆: {user_id}")
+            app_logger.debug(f"已启动异步记忆更新任务: {user_id}::{conversation_id}")
+                
         except Exception as e:
-            app_logger.error(f"保存对话到记忆失败: {e}")
+            app_logger.error(f"启动记忆更新任务失败: {e}")
     
     async def process_chat_request(self, chat_request: "ChatRequest") -> "ChatResponse":
         """处理聊天请求"""
         try:
             user_id = getattr(chat_request, 'user_id', 'default_user')
+            conversation_id = chat_request.conversationId
             
             # 提取附件数据
             attachments_data = self.extract_attachments_data(chat_request.attachments)
             
             # 提取用户上下文信息
             user_profile, contextual_prompt, short_term_context, _ = await self.extract_user_context(
-                chat_request.message, user_id
+                chat_request.message, user_id, conversation_id
             )
             
             # 使用增强意图识别处理查询
             intent, file_content, web_content, search_results, sources, reasoning = await self.process_query_with_intent(
-                chat_request.message, attachments_data, user_id
+                chat_request.message, attachments_data, user_id, conversation_id
             )
             
             # 生成AI响应
@@ -323,6 +380,7 @@ class EnhancedChatService:
             # 保存对话到长短期记忆
             await self.save_conversation_to_memory(
                 user_id=user_id,
+                conversation_id=conversation_id,
                 message=chat_request.message,
                 response=response_content,
                 intent=intent,
@@ -346,19 +404,28 @@ class EnhancedChatService:
         """处理流式聊天请求"""
         try:
             user_id = getattr(chat_request, 'user_id', 'default_user')
+            conversation_id = chat_request.conversationId
             
             # 提取附件数据
             attachments_data = self.extract_attachments_data(chat_request.attachments)
             
             # 提取用户上下文信息
             user_profile, contextual_prompt, short_term_context, _ = await self.extract_user_context(
-                chat_request.message, user_id
+                chat_request.message, user_id, conversation_id
             )
             
             # 使用增强意图识别处理查询
             intent, file_content, web_content, search_results, sources, reasoning = await self.process_query_with_intent(
-                chat_request.message, attachments_data, user_id
+                chat_request.message, attachments_data, user_id, conversation_id
             )
+            
+            # 发送元数据
+            metadata = {
+                "type": "metadata",
+                "intent": intent,
+                "sources": sources
+            }
+            yield f"data: {json.dumps(metadata, ensure_ascii=False)}\n\n"
             
             # 收集完整的AI响应
             full_response = ""
@@ -384,6 +451,7 @@ class EnhancedChatService:
             # 保存对话到长短期记忆
             await self.save_conversation_to_memory(
                 user_id=user_id,
+                conversation_id=conversation_id,
                 message=chat_request.message,
                 response=full_response,
                 intent=intent,

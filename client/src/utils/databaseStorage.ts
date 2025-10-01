@@ -20,23 +20,6 @@ export class DatabaseStorage {
    * 获取用户ID
    */
   private static getUserId(): string {
-    // 从当前用户状态获取用户ID，不再使用本地存储
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        return userData.id;
-      } catch (error) {
-        console.error('解析用户数据失败:', error);
-      }
-    }
-    return 'default_user';
-  }
-
-  /**
-   * 获取当前用户ID（从localStorage）
-   */
-  private static getCurrentUserId(): string {
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       try {

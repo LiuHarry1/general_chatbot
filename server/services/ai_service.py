@@ -84,10 +84,18 @@ class AIService:
                 "3. 如果网页中没有相关信息，请明确说明\n"
                 "4. 可以引用网页中的具体内容来支持你的回答\n"
                 "5. 保持回答的准确性和客观性\n"
-                "6. 请确保回答内容积极正面，符合社会价值观"
+                "6. 请确保回答内容积极正面，符合社会价值观\n"
+                "7. 如果遇到网页访问错误（如反爬虫保护），请清晰地向用户解释问题，并提供解决建议：\n"
+                "   - 建议用户使用搜索功能来查找相关信息\n"
+                "   - 或者建议用户直接复制网页内容后提问\n"
+                "   - 或者尝试访问其他新闻源"
             )
             if web_content:
-                system_prompt += f"\n\n当前分析的网页内容：\n{web_content[:settings.max_content_length]}"
+                # 检查是否是错误信息
+                if web_content.startswith("错误："):
+                    system_prompt += f"\n\n网页访问状态：\n{web_content}\n\n请向用户解释这个问题，并提供有用的建议。"
+                else:
+                    system_prompt += f"\n\n当前分析的网页内容：\n{web_content[:settings.max_content_length]}"
         
         elif search_results:
             system_prompt = (

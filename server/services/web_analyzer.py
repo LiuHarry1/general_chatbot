@@ -119,17 +119,21 @@ class WebAnalyzer:
             # 验证URL
             self.validate_url(url)
             
-            # 发送HTTP请求
+            # 发送HTTP请求，使用更真实的浏览器Headers
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(
                     url,
                     headers={
-                        'User-Agent': USER_AGENT,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                        'Accept-Encoding': 'gzip, deflate',
+                        'Accept-Encoding': 'gzip, deflate, br',
                         'Connection': 'keep-alive',
                         'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none',
+                        'Cache-Control': 'max-age=0',
                     },
                     follow_redirects=True
                 )
@@ -141,6 +145,11 @@ class WebAnalyzer:
             # 提取标题和内容
             title = self.extract_title(soup)
             content = self.extract_content(soup)
+            
+            # 检查是否遇到反爬虫保护
+            if len(content) < 100 or "安全验证" in title or "验证" in content[:100]:
+                app_logger.warning(f"可能遇到反爬虫保护: {url}, 内容长度: {len(content)}, 标题: {title}")
+                raise ValueError(f"无法访问网页内容，可能遇到反爬虫保护。标题：{title}，请尝试其他URL或手动复制内容。")
             
             if not content:
                 raise ValueError("无法提取网页内容")

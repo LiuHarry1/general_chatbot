@@ -4,7 +4,6 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Globe, FileText, MessageCircle, Search, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
-import TypingIndicator from './TypingIndicator';
 
 interface MessageBubbleProps {
   message: ChatMessage;

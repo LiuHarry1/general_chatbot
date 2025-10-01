@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Attachment, FileAttachment, UrlAttachment } from '../types';
-import { Paperclip, Link, X, Send, FileText, Globe } from 'lucide-react';
+import { Paperclip, X, FileText, Globe } from 'lucide-react';
 import { uploadFile, analyzeUrl } from '../services/api';
 
 interface InputAreaProps {

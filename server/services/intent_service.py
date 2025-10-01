@@ -161,30 +161,61 @@ class LLMBasedIntentService:
         """
         app_logger.info(f"开始意图识别: {message}")
         
-        # 1. 检查文件附件（优先级最高）
+        # 1. 检查附件（区分文件和URL）
         if attachments and len(attachments) > 0:
-            app_logger.info("检测到文件附件，使用文件分析意图")
-            try:
-                # 处理文件内容
-                file_content = ""
-                for attachment in attachments:
-                    if attachment.get('content'):
-                        file_content += f"\n\n文件 {attachment.get('filename', 'unknown')}:\n{attachment['content']}"
-                
-                return IntentResult(
-                    intent=IntentType.FILE,
-                    content=file_content,
-                    confidence=1.0,
-                    reasoning="检测到文件附件"
-                )
-            except Exception as e:
-                app_logger.error(f"处理文件附件失败: {e}")
-                return IntentResult(
-                    intent=IntentType.NORMAL,
-                    content=message,
-                    confidence=1.0,
-                    reasoning=f"文件处理失败，使用普通对话: {str(e)}"
-                )
+            # 检查是否有URL类型的附件
+            url_attachments = [att for att in attachments if att.get('type') == 'url']
+            file_attachments = [att for att in attachments if att.get('type') == 'file' or att.get('type') != 'url']
+            
+            # 优先处理URL附件
+            if url_attachments:
+                app_logger.info("检测到URL附件，使用网页分析意图")
+                try:
+                    # 处理URL内容
+                    web_content = ""
+                    for attachment in url_attachments:
+                        if attachment.get('content'):
+                            web_content += f"\n\n{attachment['content']}"
+                    
+                    return IntentResult(
+                        intent=IntentType.WEB,
+                        content=web_content,
+                        confidence=1.0,
+                        reasoning="检测到URL附件"
+                    )
+                except Exception as e:
+                    app_logger.error(f"处理URL附件失败: {e}")
+                    return IntentResult(
+                        intent=IntentType.NORMAL,
+                        content=message,
+                        confidence=1.0,
+                        reasoning=f"URL处理失败，使用普通对话: {str(e)}"
+                    )
+            
+            # 处理文件附件
+            if file_attachments:
+                app_logger.info("检测到文件附件，使用文件分析意图")
+                try:
+                    # 处理文件内容
+                    file_content = ""
+                    for attachment in file_attachments:
+                        if attachment.get('content'):
+                            file_content += f"\n\n文件 {attachment.get('filename', 'unknown')}:\n{attachment['content']}"
+                    
+                    return IntentResult(
+                        intent=IntentType.FILE,
+                        content=file_content,
+                        confidence=1.0,
+                        reasoning="检测到文件附件"
+                    )
+                except Exception as e:
+                    app_logger.error(f"处理文件附件失败: {e}")
+                    return IntentResult(
+                        intent=IntentType.NORMAL,
+                        content=message,
+                        confidence=1.0,
+                        reasoning=f"文件处理失败，使用普通对话: {str(e)}"
+                    )
         
         # 2. 检查URL（优先级第二）
         urls = self.detect_urls(message)
@@ -193,7 +224,8 @@ class LLMBasedIntentService:
             try:
                 # 分析第一个URL
                 url = urls[0]
-                web_content = await self.web_analyzer.analyze_url(url)
+                web_result = await self.web_analyzer.analyze_web_page(url)
+                web_content = f"标题：{web_result['title']}\n\n内容：{web_result['content']}"
                 
                 return IntentResult(
                     intent=IntentType.WEB,
@@ -202,13 +234,25 @@ class LLMBasedIntentService:
                     reasoning=f"检测到URL: {url}"
                 )
             except Exception as e:
-                app_logger.error(f"分析URL失败: {e}")
-                return IntentResult(
-                    intent=IntentType.NORMAL,
-                    content=message,
-                    confidence=1.0,
-                    reasoning=f"URL分析失败，使用普通对话: {str(e)}"
-                )
+                error_msg = str(e)
+                app_logger.error(f"分析URL失败: {error_msg}")
+                
+                # 如果是反爬虫保护错误，使用WEB意图但传递错误信息
+                if "反爬虫" in error_msg or "安全验证" in error_msg:
+                    return IntentResult(
+                        intent=IntentType.WEB,
+                        content=f"错误：{error_msg}\n\n原始问题：{message}",
+                        confidence=0.8,
+                        reasoning=f"URL分析遇到反爬虫保护: {url}"
+                    )
+                else:
+                    # 其他错误，降级为普通对话
+                    return IntentResult(
+                        intent=IntentType.NORMAL,
+                        content=f"无法访问网页 {url}，错误：{error_msg}\n\n{message}",
+                        confidence=0.7,
+                        reasoning=f"URL分析失败: {error_msg}"
+                    )
         
         # 3. 使用LLM分析其他意图（search, code, normal）
         app_logger.info("使用LLM分析用户意图")
