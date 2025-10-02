@@ -1,3 +1,11 @@
+export interface SearchResult {
+  title: string;
+  url: string;
+  content: string;
+  score: number;
+  published_date?: string;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId?: string;
@@ -7,6 +15,7 @@ export interface ChatMessage {
   attachments?: Attachment[];
   intent?: 'normal' | 'web' | 'file' | 'search' | 'code';
   sources?: string[];
+  searchResults?: SearchResult[];
   isTyping?: boolean;
 }
 

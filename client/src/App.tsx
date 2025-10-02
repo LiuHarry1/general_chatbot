@@ -6,6 +6,7 @@ import LoginForm from './components/LoginForm';
 import LoadingScreen from './components/LoadingScreen';
 import Header from './components/Header';
 import NewConversationView from './components/NewConversationView';
+import SearchResultsSidebar from './components/SearchResultsSidebar';
 import { ChatMessage, Conversation, Attachment, User } from './types';
 import { sendMessageStream } from './services/api';
 import { useConversation } from './hooks/useConversation';
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   const [currentAttachments, setCurrentAttachments] = useState<Attachment[]>([]);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [isNewConversation, setIsNewConversation] = useState(true);
+  const [searchResultsOpen, setSearchResultsOpen] = useState(false);
+  const [currentSearchSources, setCurrentSearchSources] = useState<string[]>([]);
+  const [currentSearchResults, setCurrentSearchResults] = useState<any[]>([]);
   
   // 使用认证管理hook
   const { user, isAuthenticated, isLoading: authLoading, login, logout } = useAuth();
@@ -80,8 +84,9 @@ const App: React.FC = () => {
       return;
     }
 
-    // 用于累积流式内容
+    // 用于累积流式内容和保存metadata
     let accumulatedContent = '';
+    let savedMetadata: { intent?: string; sources?: string[]; searchResults?: any[] } = {};
     
     try {
       await sendMessageStream(
@@ -96,16 +101,27 @@ const App: React.FC = () => {
             accumulatedContent += chunk;
             updateMessage(botMessage.id, { 
               content: accumulatedContent,
-              isTyping: true // 保持loading状态，直到流式输出结束
+              isTyping: true, // 保持loading状态，直到流式输出结束
+              // 保留已保存的metadata
+              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+              sources: savedMetadata.sources,
+              searchResults: savedMetadata.searchResults
             }, false); // 不保存到数据库，只更新本地状态
           }
         },
         // onMetadata - 处理元数据
         (metadata) => {
           if (botMessage) {
+            // 保存metadata到本地变量
+            savedMetadata = {
+              intent: metadata.intent,
+              sources: metadata.sources,
+              searchResults: metadata.search_results
+            };
             updateMessage(botMessage.id, {
               intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
               sources: metadata.sources,
+              searchResults: metadata.search_results,
               isTyping: true // 保持loading状态，直到流式输出结束
             }, false); // 不保存到数据库，只更新本地状态
           }
@@ -115,7 +131,11 @@ const App: React.FC = () => {
           if (botMessage) {
             updateMessage(botMessage.id, { 
               content: `错误: ${error}`, 
-              isTyping: false 
+              isTyping: false,
+              // 使用保存的metadata
+              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+              sources: savedMetadata.sources,
+              searchResults: savedMetadata.searchResults
             }, true); // 错误时保存到数据库
           }
         },
@@ -124,7 +144,11 @@ const App: React.FC = () => {
           if (botMessage) {
             updateMessage(botMessage.id, { 
               content: accumulatedContent,
-              isTyping: false 
+              isTyping: false,
+              // 使用保存的metadata
+              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+              sources: savedMetadata.sources,
+              searchResults: savedMetadata.searchResults
             }, true); // 结束时保存到数据库
           }
         },
@@ -169,7 +193,11 @@ const App: React.FC = () => {
       if (botMessage) {
         updateMessage(botMessage.id, { 
           content: '抱歉，我遇到了一个错误。请稍后重试。', 
-          isTyping: false 
+          isTyping: false,
+          // 使用保存的metadata
+          intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+          sources: savedMetadata.sources,
+          searchResults: savedMetadata.searchResults
         });
       }
     }
@@ -210,6 +238,16 @@ const App: React.FC = () => {
   const handleLogout = () => {
     logout();
     setUserDropdownOpen(false);
+  };
+
+  const handleShowSearchResults = (sources: string[], searchResults?: any[]) => {
+    setCurrentSearchSources(sources);
+    setCurrentSearchResults(searchResults || []);
+    setSearchResultsOpen(true);
+  };
+
+  const handleCloseSearchResults = () => {
+    setSearchResultsOpen(false);
   };
 
   // 使用点击外部hook
@@ -289,7 +327,11 @@ const App: React.FC = () => {
           ) : (
             // 已有对话：正常布局
             <>
-              <ChatArea messages={messages} isLoading={isLoading} />
+              <ChatArea 
+                messages={messages} 
+                isLoading={isLoading} 
+                onShowSearchResults={handleShowSearchResults}
+              />
               <InputArea 
                 onSendMessage={handleSendMessage} 
                 attachments={currentAttachments}
@@ -299,6 +341,14 @@ const App: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* 搜索结果侧边栏 */}
+      <SearchResultsSidebar
+        isOpen={searchResultsOpen}
+        sources={currentSearchSources}
+        searchResults={currentSearchResults}
+        onClose={handleCloseSearchResults}
+      />
     </div>
   );
 };

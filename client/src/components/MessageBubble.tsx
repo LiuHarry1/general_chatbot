@@ -3,17 +3,21 @@ import { ChatMessage } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Copy, Check, ExternalLink } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  onShowSearchResults?: (sources: string[], searchResults?: any) => void;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResults }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
+  
+  // 直接计算是否应该显示搜索按钮，不使用状态管理
+  const shouldShowSearchButton = !isUser && message.sources && message.sources.length > 0;
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -108,8 +112,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                     )}
                   </div>
                   
-                  {/* 参考来源 */}
-                  {message.sources && message.sources.length > 0 && (
+                  {/* 搜索结果参考网页按钮 - 在内容和操作按钮之间 */}
+                  {shouldShowSearchButton && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => onShowSearchResults?.(message.sources || [], message.searchResults)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-sm font-medium"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>{message.sources?.length || 0} web pages</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* 参考来源 - 非搜索结果时显示 */}
+                  {!shouldShowSearchButton && message.sources && message.sources.length > 0 && (
                     <div className="mt-4 pt-4">
                       <p className="text-xs text-gray-500 mb-2 font-medium">参考来源：</p>
                       <div className="space-y-1">

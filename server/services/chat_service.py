@@ -362,7 +362,8 @@ class EnhancedChatService:
             metadata = {
                 "type": "metadata",
                 "intent": intent,
-                "sources": sources
+                "sources": sources,
+                "search_results": search_results.get("results", []) if search_results else []
             }
             yield f"data: {json.dumps(metadata, ensure_ascii=False)}\n\n"
             

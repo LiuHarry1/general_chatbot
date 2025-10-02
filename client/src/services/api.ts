@@ -28,7 +28,7 @@ interface MessageApiResponse {
 export const sendMessageStream = async (
   request: SendMessageRequest,
   onChunk: (chunk: string) => void,
-  onMetadata: (metadata: { intent?: string; sources?: string[]; created_at?: Date }) => void,
+  onMetadata: (metadata: { intent?: string; sources?: string[]; search_results?: any[]; created_at?: Date }) => void,
   onError: (error: string) => void,
   onEnd: () => void,
   onImage?: (image: { url: string; filename: string }) => void,
@@ -76,6 +76,7 @@ export const sendMessageStream = async (
                 onMetadata({
                   intent: data.intent,
                   sources: data.sources,
+                  search_results: data.search_results,
                   created_at: data.created_at ? new Date(data.created_at) : undefined
                 });
                 break;

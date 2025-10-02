@@ -6,9 +6,10 @@ import { Bot, Sparkles, Search, FileText, Code, Lightbulb, Zap } from 'lucide-re
 interface ChatAreaProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  onShowSearchResults?: (sources: string[]) => void;
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, isLoading }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, isLoading, onShowSearchResults }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -102,7 +103,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, isLoading }) => {
         ) : (
             <div className="space-y-3">
             {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBubble 
+                key={message.id} 
+                message={message} 
+                onShowSearchResults={onShowSearchResults}
+              />
             ))}
           </div>
         )}
