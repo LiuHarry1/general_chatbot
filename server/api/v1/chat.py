@@ -7,32 +7,12 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from models import ChatRequest, ChatResponse
+from models import ChatRequest
 from services.chat_service import enhanced_chat_service
-from services.ai_service import ai_service
 from utils.logger import app_logger
 
 # 创建路由器
 router = APIRouter()
-
-
-@router.post("/", response_model=ChatResponse)
-async def chat(chat_request: ChatRequest):
-    """聊天对话接口"""
-    try:
-        app_logger.info(f"收到聊天请求 - 对话ID: {chat_request.conversationId}, 消息: {chat_request.message[:100]}...")
-        
-        # 使用EnhancedChatService处理聊天请求
-        response = await enhanced_chat_service.process_chat_request(chat_request)
-        
-        app_logger.info(f"聊天响应生成完成 - 响应长度: {len(response.content)}")
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        app_logger.error(f"聊天处理失败: {e}")
-        raise HTTPException(status_code=500, detail="处理聊天请求时发生错误")
 
 
 @router.post("/stream")

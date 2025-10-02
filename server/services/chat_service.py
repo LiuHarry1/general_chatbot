@@ -150,38 +150,6 @@ class EnhancedChatService:
             app_logger.error(f"提取用户上下文失败: {e}")
             return {}, "", "", []
     
-    async def process_query_with_intent(self, message: str, attachments_data: List[Dict[str, Any]], user_id: str, conversation_id: str) -> Tuple[str, Optional[str], Optional[str], List[str], str]:
-        """使用增强意图识别处理查询"""
-        # 提取用户上下文（包含最近对话历史）
-        user_profile, contextual_prompt, short_term_context, recent_conversations = await self.extract_user_context(message, user_id, conversation_id)
-        
-        # 使用意图识别服务（传入最近对话历史）
-        intent_result = await self.intent_service.process_intent(
-            message, attachments_data, user_id, recent_conversations
-        )
-        
-        app_logger.info(f"意图识别结果 - 意图: {intent_result.intent.value}, 置信度: {intent_result.confidence}, 推理: {intent_result.reasoning}")
-        
-        # 根据意图结果准备参数
-        file_content = None
-        web_content = None
-        search_results = None
-        sources = []
-        
-        if intent_result.intent == IntentType.FILE:
-            file_content = intent_result.content
-        elif intent_result.intent == IntentType.WEB:
-            web_content = intent_result.content
-        elif intent_result.intent == IntentType.SEARCH:
-            search_results = intent_result.search_results
-            # 提取搜索来源
-            if search_results and search_results.get("results"):
-                sources = [result["url"] for result in search_results["results"]]
-        elif intent_result.intent == IntentType.CODE:
-            # 代码执行功能
-            pass
-        
-        return intent_result.intent.value, file_content, web_content, search_results, sources, intent_result.reasoning
     
     async def generate_stream_response(self, message: str, intent: str, file_content: Optional[str], 
                                      web_content: Optional[str], search_results: Optional[Dict[str, Any]], 
@@ -346,59 +314,6 @@ class EnhancedChatService:
         except Exception as e:
             app_logger.error(f"启动记忆更新任务失败: {e}")
     
-    async def process_chat_request(self, chat_request: "ChatRequest") -> "ChatResponse":
-        """处理聊天请求"""
-        try:
-            user_id = getattr(chat_request, 'user_id', 'default_user')
-            conversation_id = chat_request.conversationId
-            
-            # 提取附件数据
-            attachments_data = self.extract_attachments_data(chat_request.attachments)
-            
-            # 提取用户上下文信息
-            user_profile, contextual_prompt, short_term_context, _ = await self.extract_user_context(
-                chat_request.message, user_id, conversation_id
-            )
-            
-            # 使用增强意图识别处理查询
-            intent, file_content, web_content, search_results, sources, reasoning = await self.process_query_with_intent(
-                chat_request.message, attachments_data, user_id, conversation_id
-            )
-            
-            # 生成AI响应
-            response_content = await self.ai_service.generate_response(
-                user_message=chat_request.message,
-                intent=intent,
-                file_content=file_content,
-                web_content=web_content,
-                search_results=search_results,
-                user_identity=user_profile,
-                contextual_prompt=contextual_prompt,
-                short_term_context=short_term_context
-            )
-            
-            # 保存对话到长短期记忆
-            await self.save_conversation_to_memory(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                message=chat_request.message,
-                response=response_content,
-                intent=intent,
-                sources=sources
-            )
-            
-            # 返回响应
-            from models import ChatResponse
-            return ChatResponse(
-                content=response_content,
-                intent=intent,
-                sources=sources,
-                timestamp=datetime.now().isoformat()
-            )
-            
-        except Exception as e:
-            app_logger.error(f"处理聊天请求失败: {e}")
-            raise
     
     async def process_stream_request(self, chat_request: "ChatRequest") -> AsyncGenerator[str, None]:
         """处理流式聊天请求"""
@@ -409,15 +324,39 @@ class EnhancedChatService:
             # 提取附件数据
             attachments_data = self.extract_attachments_data(chat_request.attachments)
             
-            # 提取用户上下文信息
-            user_profile, contextual_prompt, short_term_context, _ = await self.extract_user_context(
+            # 提取用户上下文信息（只调用一次）
+            user_profile, contextual_prompt, short_term_context, recent_conversations = await self.extract_user_context(
                 chat_request.message, user_id, conversation_id
             )
             
-            # 使用增强意图识别处理查询
-            intent, file_content, web_content, search_results, sources, reasoning = await self.process_query_with_intent(
-                chat_request.message, attachments_data, user_id, conversation_id
+            # 直接调用意图识别服务（避免通过process_query_with_intent重复调用extract_user_context）
+            intent_result = await self.intent_service.process_intent(
+                chat_request.message, attachments_data, user_id, recent_conversations
             )
+            
+            app_logger.info(f"意图识别结果 - 意图: {intent_result.intent.value}, 置信度: {intent_result.confidence}, 推理: {intent_result.reasoning}")
+            
+            # 根据意图结果准备参数
+            file_content = None
+            web_content = None
+            search_results = None
+            sources = []
+            
+            if intent_result.intent == IntentType.FILE:
+                file_content = intent_result.content
+            elif intent_result.intent == IntentType.WEB:
+                web_content = intent_result.content
+            elif intent_result.intent == IntentType.SEARCH:
+                search_results = intent_result.search_results
+                # 提取搜索来源
+                if search_results and search_results.get("results"):
+                    sources = [result["url"] for result in search_results["results"]]
+            elif intent_result.intent == IntentType.CODE:
+                # 代码执行功能
+                pass
+            
+            intent = intent_result.intent.value
+            reasoning = intent_result.reasoning
             
             # 发送元数据
             metadata = {
