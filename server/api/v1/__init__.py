@@ -9,7 +9,6 @@ from .health import router as health_router
 from .conversations import router as conversations_router
 from .messages import router as messages_router
 from .images import router as images_router
-from .memory import router as memory_router
 
 # 创建v1路由器
 router = APIRouter()
@@ -21,6 +20,5 @@ router.include_router(health_router, tags=["health"])
 router.include_router(conversations_router, prefix="/db", tags=["对话"])
 router.include_router(messages_router, prefix="/db", tags=["消息"])
 router.include_router(images_router, prefix="/images", tags=["images"])
-router.include_router(memory_router, tags=["memory"])
 
 __all__ = ['router']

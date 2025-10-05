@@ -1,6 +1,6 @@
 """
-用户画像服务
-智能提取和管理用户偏好、身份信息
+User Profile Service
+Intelligent extraction and management of user preferences and identity information
 """
 import re
 import json
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProfileService:
-    """用户画像服务"""
+    """User profile service"""
     
     def __init__(self):
         # 偏好提取关键词
@@ -285,107 +285,6 @@ class ProfileService:
         except Exception as e:
             app_logger.error(f"构建上下文提示词失败: {e}")
             return ""
-    
-    async def analyze_user_behavior(
-        self,
-        user_id: str,
-        action_type: str,
-        action_data: Dict[str, Any]
-    ) -> bool:
-        """分析用户行为模式"""
-        try:
-            # 记录行为
-            behavior_record = {
-                "action_type": action_type,
-                "action_data": action_data,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            # 存储到Redis（临时存储，定期清理）
-            behavior_key = f"behavior:{user_id}:{datetime.now().strftime('%Y%m%d')}"
-            await redis_manager.cache_session_data(behavior_key, behavior_record, ttl=86400)
-            
-            # 分析行为模式
-            await self._analyze_behavior_patterns(user_id, action_type, action_data)
-            
-            return True
-            
-        except Exception as e:
-            app_logger.error(f"分析用户行为失败: {e}")
-            return False
-    
-    async def _analyze_behavior_patterns(
-        self,
-        user_id: str,
-        action_type: str,
-        action_data: Dict[str, Any]
-    ):
-        """分析用户行为模式"""
-        try:
-            # 获取用户画像
-            profile = await self.get_user_profile(user_id)
-            
-            # 分析活跃时间
-            current_hour = datetime.now().hour
-            if "active_hours" not in profile:
-                profile["active_hours"] = []
-            
-            if current_hour not in profile["active_hours"]:
-                profile["active_hours"].append(current_hour)
-                # 只保留最近7天的活跃时间
-                if len(profile["active_hours"]) > 24:
-                    profile["active_hours"] = profile["active_hours"][-24:]
-            
-            # 分析使用频率
-            if "usage_frequency" not in profile:
-                profile["usage_frequency"] = {"daily": 0, "weekly": 0, "monthly": 0}
-            
-            profile["usage_frequency"]["daily"] += 1
-            
-            # 分析偏好强度
-            if action_type == "message_sent":
-                message_content = action_data.get("content", "")
-                await self._analyze_preference_strength(user_id, message_content, profile)
-            
-            # 保存更新后的画像
-            await redis_manager.set_user_profile(user_id, profile)
-            
-        except Exception as e:
-            app_logger.error(f"分析行为模式失败: {e}")
-    
-    async def _analyze_preference_strength(
-        self,
-        user_id: str,
-        message: str,
-        profile: Dict[str, Any]
-    ):
-        """分析偏好强度"""
-        try:
-            # 检测情感强度
-            positive_count = sum(1 for keyword in self.emotion_keywords["positive"] if keyword in message)
-            negative_count = sum(1 for keyword in self.emotion_keywords["negative"] if keyword in message)
-            
-            if positive_count > negative_count:
-                strength = "strong" if positive_count >= 3 else "moderate"
-                emotion = "positive"
-            elif negative_count > positive_count:
-                strength = "strong" if negative_count >= 3 else "moderate"
-                emotion = "negative"
-            else:
-                strength = "weak"
-                emotion = "neutral"
-            
-            # 更新偏好强度
-            if "preference_strength" not in profile:
-                profile["preference_strength"] = {}
-            
-            profile["preference_strength"][emotion] = {
-                "strength": strength,
-                "last_updated": datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            app_logger.error(f"分析偏好强度失败: {e}")
     
     async def get_user_insights(self, user_id: str) -> Dict[str, Any]:
         """获取用户洞察"""

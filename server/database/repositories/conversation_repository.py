@@ -79,6 +79,33 @@ class ConversationRepository:
         affected = self.db.execute_update(query, (title, now, conversation_id))
         return affected > 0
     
+    def get_current_conversation_messages(self, conversation_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """获取当前对话的已完成消息历史，用于意图识别（排除当前用户的问题）"""
+        try:
+            query = """
+                SELECT role, content, created_at
+                FROM messages
+                WHERE conversation_id = ?
+                ORDER BY created_at ASC
+            """
+            messages = self.db.execute_query(query, (conversation_id,))
+            
+            # 转换为用于意图识别的格式，只包含已完成的对话对
+            result = []
+            for i in range(len(messages) - 1):
+                if messages[i]['role'] == 'user' and messages[i + 1]['role'] == 'assistant':
+                    result.append({
+                        'user_message': messages[i]['content'],
+                        'ai_response': messages[i + 1]['content']
+                    })
+            
+            # 限制返回的对话对数量，最多返回最近N个对话对
+            return result[-limit:] if limit > 0 else result
+            
+        except Exception as e:
+            logger.error(f"获取当前对话消息失败: {e}")
+            return []
+
     def delete_conversation(self, conversation_id: str) -> bool:
         """删除对话及其所有消息"""
         try:

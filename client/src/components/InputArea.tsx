@@ -16,6 +16,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastProcessedUrlRef = useRef<string>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +73,16 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     const targetUrl = url || prompt('请输入要分析的网页链接：');
     if (!targetUrl) return;
 
+    // 检查URL是否已经存在于附件中
+    const existingUrlAttachment = attachments.find(att => 
+      att.type === 'url' && (att.data as UrlAttachment).url === targetUrl
+    );
+    
+    if (existingUrlAttachment) {
+      console.log('URL already exists in attachments, skipping analysis');
+      return;
+    }
+
     setIsUploading(true);
     try {
       const response = await analyzeUrl(targetUrl);
@@ -86,9 +97,16 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
       };
       const updatedAttachments = [...attachments, newAttachment];
       onAttachmentsChange?.(updatedAttachments);
+      
+      // 成功添加后，清理已处理URL引用（延迟清理，避免重复）
+      setTimeout(() => {
+        lastProcessedUrlRef.current = '';
+      }, 5000); // 5秒后清理
     } catch (error) {
       console.error('Error analyzing URL:', error);
       alert('网页分析失败，请重试。');
+      // 出错时立即清理引用
+      lastProcessedUrlRef.current = '';
     } finally {
       setIsUploading(false);
     }
@@ -135,15 +153,41 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     const urls = detectUrls(text);
     
     if (urls.length > 0) {
-      // 自动处理第一个链接
-      const url = urls[0];
-      if (!attachments.some(att => att.type === 'url' && (att.data as UrlAttachment).url === url)) {
-        handleUrlAnalysis(url);
+      // 只处理最后一个URL（用户最可能想要分析的）
+      const lastUrl = urls[urls.length - 1];
+      
+      // 检查URL后面是否有更多文本内容
+      const urlEndIndex = text.lastIndexOf(lastUrl) + lastUrl.length;
+      const textAfterUrl = text.substring(urlEndIndex).trim();
+      
+      // 如果URL后面没有内容，或者只有标点符号和空格，则认为是完整的URL
+      const isCompleteUrl = textAfterUrl.length === 0 || /^[。，！？、\s]*$/.test(textAfterUrl);
+      
+      // 检查是否已经在处理中或已存在
+      const isAlreadyProcessing = isUploading;
+      const isAlreadyInAttachments = attachments.some(att => 
+        att.type === 'url' && (att.data as UrlAttachment).url === lastUrl
+      );
+      const isRecentlyProcessed = lastProcessedUrlRef.current === lastUrl;
+      
+      // 只处理完整的URL，且不在已有附件中，且没有正在处理，且不是最近处理过的
+      if (isCompleteUrl && !isAlreadyInAttachments && !isAlreadyProcessing && !isRecentlyProcessed) {
+        console.log('Processing URL:', lastUrl);
+        lastProcessedUrlRef.current = lastUrl;
+        handleUrlAnalysis(lastUrl);
+      } else {
+        console.log('Skipping URL processing:', {
+          url: lastUrl,
+          isCompleteUrl,
+          isAlreadyInAttachments,
+          isAlreadyProcessing,
+          isRecentlyProcessed
+        });
       }
     }
   };
 
-  // 防抖的链接检测
+  // 防抖的链接检测，避免频繁处理
   const debouncedLinkDetection = debounce(detectAndProcessLinks, UI_CONSTANTS.URL_DETECTION_DELAY);
 
   // 监听输入变化，检测链接
@@ -152,7 +196,8 @@ const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, attachments = [], 
     setInput(value);
     
     // 检测链接（延迟检测，避免频繁处理）
-    if (value.includes('http')) {
+    // 只有当输入包含完整的http(s)://开头且看起来像完整URL时才检测
+    if (value.includes('http') && /https?:\/\/[^\s]+\.[a-zA-Z]{2,}/.test(value)) {
       debouncedLinkDetection(value);
     }
   };

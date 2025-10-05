@@ -1,6 +1,6 @@
 """
-重要性评分计算器
-智能评估对话和记忆的重要性
+Importance Score Calculator
+Intelligently evaluates the importance of conversations and memories
 """
 import re
 import math
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ImportanceCalculator:
-    """重要性评分计算器"""
+    """Importance score calculator"""
     
     def __init__(self):
         # 意图权重配置

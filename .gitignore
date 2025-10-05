@@ -15,6 +15,7 @@ dist/
 
 server/images/
 server/chatbot.db
+chatbot.db
 # Logs
 logs/
 *.log

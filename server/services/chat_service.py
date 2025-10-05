@@ -1,6 +1,6 @@
 """
-增强的聊天服务
-集成智能意图识别、工具调用和长短期记忆
+聊天服务
+集成智能意图识别、工具调用和模块化记忆系统
 """
 import json
 import asyncio
@@ -11,200 +11,164 @@ from utils.logger import app_logger
 from services.ai_service import ai_service
 from services.intent_service import llm_based_intent_service, IntentType
 from services.code_executor import code_execution_service
-from memory import default_memory_manager as memory_manager
+from memory import unified_memory_manager
+from database import conversation_repo
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.schemas import ChatRequest
 
 
-class EnhancedChatService:
-    """增强的聊天服务"""
+class ChatService:
+    """聊天服务"""
     
     def __init__(self):
         self.ai_service = ai_service
         self.intent_service = llm_based_intent_service
-        self.memory_manager = memory_manager
-        # 延迟导入避免循环依赖
-        self._memory_service = None
-    
-    @property
-    def memory_service(self):
-        """懒加载记忆服务"""
-        if self._memory_service is None:
-            from services.memory_service import memory_service
-            self._memory_service = memory_service
-        return self._memory_service
+        # 使用新的统一记忆管理器
+        self.memory_manager = unified_memory_manager
     
     def extract_attachments_data(self, attachments) -> List[Dict[str, Any]]:
         """提取附件数据"""
         attachments_data = []
         if not attachments:
             return attachments_data
-            
+        
         for attachment in attachments:
             try:
-                # 处理Attachment对象（Pydantic模型）
-                if hasattr(attachment, 'data') and hasattr(attachment, 'type'):
-                    # 这是Attachment对象
-                    attachment_data = attachment.data
-                    # data可能是字典或对象
-                    if isinstance(attachment_data, dict):
-                        content = attachment_data.get('content')
-                    else:
-                        content = getattr(attachment_data, 'content', None) if hasattr(attachment_data, 'content') else None
-                    
-                    if content:
-                        attachments_data.append({
-                            'filename': attachment_data.get('name') if isinstance(attachment_data, dict) else getattr(attachment_data, 'name', 'unknown'),
-                            'content': content,
-                            'type': attachment.type
-                        })
-                elif isinstance(attachment, dict):
-                    # 这是字典格式，可能有嵌套的data字段
-                    if 'data' in attachment and isinstance(attachment['data'], dict):
-                        # 嵌套格式：{type: 'url', data: {content: '...', ...}}
-                        if attachment['data'].get('content'):
-                            attachments_data.append({
-                                'filename': attachment['data'].get('name', attachment['data'].get('filename', 'unknown')),
-                                'content': attachment['data']['content'],
-                                'type': attachment.get('type', 'text')
-                            })
-                    elif attachment.get('content'):
-                        # 扁平格式：{type: 'url', content: '...', ...}
-                        attachments_data.append({
-                            'filename': attachment.get('filename', attachment.get('name', 'unknown')),
-                            'content': attachment['content'],
-                            'type': attachment.get('type', 'text')
-                        })
-            except Exception as e:
-                app_logger.error(f"处理附件数据失败: {e}")
-                continue
+                # 根据Attachment模型结构，数据存储在data字段中
+                attachment_data = attachment.data if hasattr(attachment, 'data') else attachment
                 
+                # 构建标准化的附件数据
+                processed_attachment = {
+                    "type": getattr(attachment, 'type', attachment_data.get('type', 'unknown')),
+                    "filename": attachment_data.get('filename', attachment_data.get('name', 'unknown')),
+                    "content_type": attachment_data.get('content_type', attachment_data.get('type', 'unknown')),
+                    "size": attachment_data.get('size', 0),
+                    "content": attachment_data.get('content', ''),
+                    "url": attachment_data.get('url', None)
+                }
+                attachments_data.append(processed_attachment)
+            except Exception as e:
+                app_logger.error(f"提取附件数据失败: {e}")
+        
         return attachments_data
     
-    async def extract_user_context(self, message: str, user_id: str, conversation_id: str) -> Tuple[Dict[str, Any], str, str, List[Dict]]:
-        """提取用户上下文信息（集成长短期记忆）"""
-        try:
-            # 使用长短期记忆系统提取用户偏好和上下文
-            user_profile = {}
-            contextual_prompt = ""
-            short_term_context = ""
-            recent_conversations = []
-            
-            # 从长期记忆获取用户画像和相似历史对话
-            try:
-                # 获取长期记忆上下文（包含用户画像和语义相似对话）
-                long_term_context, user_profile_data = await self.memory_service.get_long_term_context(
-                    user_id=user_id,
-                    current_message=message,
-                    limit=3
-                )
-                
-                if long_term_context:
-                    contextual_prompt += f"\n\n{long_term_context}\n"
-                
-                # 更新用户画像数据
-                if user_profile_data:
-                    user_profile = user_profile_data
-                    
-            except Exception as e:
-                app_logger.error(f"获取长期记忆失败: {e}")
-            
-            # 从数据库获取当前对话的短期记忆（智能压缩）
-            try:
-                from database import message_repo
-                
-                # 获取所有消息
-                messages = message_repo.get_messages(conversation_id)
-                
-                # 使用智能压缩获取短期记忆上下文
-                compressed_context, metadata = await self.memory_service.get_short_term_context(
-                    conversation_id=conversation_id,
-                    messages=messages
-                )
-                
-                if compressed_context:
-                    short_term_context += f"\n\n{compressed_context}\n"
-                    
-                    # 记录压缩信息
-                    if metadata.get('compressed'):
-                        app_logger.info(
-                            f"短期记忆已压缩 - 原始:{metadata['total_messages']}条/"
-                            f"{metadata['total_tokens']}tokens, "
-                            f"压缩后:{metadata['compressed_tokens']}tokens, "
-                            f"压缩率:{metadata['compression_ratio']:.1%}"
-                        )
-                
-                # 构建用于意图识别的对话列表（使用最近的消息）
-                recent_messages = messages[-6:] if len(messages) > 6 else messages
-                for i in range(0, len(recent_messages), 2):
-                    if i + 1 < len(recent_messages):
-                        recent_conversations.append({
-                            'user_message': recent_messages[i]['content'],
-                            'ai_response': recent_messages[i+1]['content']
-                        })
-                        
-            except Exception as e:
-                app_logger.error(f"从数据库获取对话历史失败: {e}")
-            
-            return user_profile, contextual_prompt, short_term_context, recent_conversations
-            
-        except Exception as e:
-            app_logger.error(f"提取用户上下文失败: {e}")
-            return {}, "", "", []
-    
-    
-    async def generate_stream_response(self, message: str, intent: str, file_content: Optional[str], 
-                                     web_content: Optional[str], search_results: Optional[Dict[str, Any]], 
-                                     user_profile: Dict[str, Any], contextual_prompt: str, 
-                                     short_term_context: str, user_id: str = "default_user") -> AsyncGenerator[str, None]:
-        """生成流式响应"""
+    async def extract_user_context(
+        self, 
+        user_id: str, 
+        conversation_id: str, 
+        message: str
+    ) -> Tuple[Dict[str, Any], str, str, List[Dict[str, Any]]]:
+        """
+        提取用户上下文信息
+        返回: (user_profile, contextual_prompt, short_term_context, recent_conversations)
+        """
+        user_profile = {}
+        contextual_prompt = ""
+        short_term_context = ""
+        recent_conversations = []
         
-        if intent == "code":
-            # 处理代码执行
-            async for chunk in self._handle_code_execution(message, user_profile, contextual_prompt, short_term_context, user_id):
-                yield chunk
-        else:
-            # 处理其他类型的响应
+        try:
+            # 使用统一记忆管理器获取完整上下文
+            context_result = await self.memory_manager.get_conversation_context(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                current_message=message,
+                limit=3
+            )
+            
+            # 获取短期记忆上下文
+            short_term_context_data = context_result.get("short_term_context", "")
+            if short_term_context_data:
+                short_term_context = short_term_context_data
+            
+            # 获取长期记忆上下文
+            long_term_context_data = context_result.get("long_term_context", "")
+            if long_term_context_data:
+                contextual_prompt = long_term_context_data
+            
+            # 获取用户画像
+            user_profile_data = context_result.get("user_profile", {})
+            if user_profile_data:
+                user_profile = user_profile_data
+            
+            # 记录上下文信息
+            metadata = context_result.get("metadata", {})
+            short_term_meta = metadata.get("short_term_metadata", {})
+            
+            # 获取当前对话的消息历史用于意图识别
+            try:
+                recent_conversations = conversation_repo.get_current_conversation_messages(
+                    conversation_id=conversation_id,
+                    limit=5
+                )
+                app_logger.info(f"获取到当前对话的 {len(recent_conversations)} 条消息用于意图识别")
+            except Exception as e:
+                app_logger.error(f"获取当前对话消息失败: {e}")
+                # 如果获取失败，使用空列表作为fallback
+                recent_conversations = []
+                    
+        except Exception as e:
+            app_logger.error(f"获取对话上下文失败: {e}")
+        
+        return user_profile, contextual_prompt, short_term_context, recent_conversations
+    
+    async def generate_stream_response(
+        self, 
+        message: str, 
+        intent: str, 
+        file_content: Optional[str], 
+        web_content: Optional[str], 
+        search_results: Optional[List[Dict]], 
+        user_identity: Dict[str, Any], 
+        contextual_prompt: str, 
+        short_term_context: str
+    ) -> AsyncGenerator[str, None]:
+        """生成流式响应"""
+        try:
             async for chunk in self.ai_service.generate_stream_response(
                 user_message=message,
                 intent=intent,
                 file_content=file_content,
                 web_content=web_content,
                 search_results=search_results,
-                user_identity=user_profile,
+                user_identity=user_identity,
                 contextual_prompt=contextual_prompt,
                 short_term_context=short_term_context
             ):
-                chunk_data = {
-                    "type": "content",
-                    "content": chunk
-                }
-                yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+                yield chunk
+                
+        except Exception as e:
+            app_logger.error(f"生成流式响应失败: {e}")
+            error_data = {
+                "type": "content",
+                "content": f"❌ 生成响应失败: {str(e)}"
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
     
-    async def _handle_code_execution(self, message: str, user_profile: Dict[str, Any], 
-                                   contextual_prompt: str, short_term_context: str, 
-                                   user_id: str) -> AsyncGenerator[str, None]:
+    async def handle_code_execution(
+        self, 
+        user_id: str, 
+        code_response: str
+    ) -> AsyncGenerator[str, None]:
         """处理代码执行"""
         try:
-            # 首先生成代码
-            app_logger.info("开始生成代码")
+            # 发送代码执行提示
+            prompt_data = {
+                "type": "content",
+                "content": "🔧 正在执行代码...\n"
+            }
+            yield f"data: {json.dumps(prompt_data, ensure_ascii=False)}\n\n"
             
-            code_response = ""
-            async for chunk in self.ai_service.generate_stream_response(
-                user_message=message,
-                intent="code",
-                file_content=None,
-                web_content=None,
-                search_results=None,
-                user_identity=user_profile,
-                contextual_prompt=contextual_prompt,
-                short_term_context=short_term_context
-            ):
-                code_response += chunk
-                # 流式发送代码生成过程
-                chunk_data = {
-                    "type": "content",
-                    "content": chunk
-                }
-                yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+            # 发送代码内容
+            for chunk in code_response.split('\n'):
+                if chunk.strip():
+                    chunk_data = {
+                        "type": "content",
+                        "content": chunk
+                    }
+                    yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
             
             # 提取代码
             code = self._extract_code_from_response(code_response)
@@ -289,54 +253,77 @@ class EnhancedChatService:
         
         return ""
     
-    async def save_conversation_to_memory(self, user_id: str, conversation_id: str, message: str, 
-                                        response: str, intent: str, sources: List[str]):
+    async def save_conversation_to_memory(
+        self, 
+        user_id: str, 
+        conversation_id: str, 
+        message: str, 
+        response: str, 
+        intent: str, 
+        sources: List[str]
+    ):
         """
         保存对话到记忆系统
-        - 短期记忆：已在数据库中，自动智能压缩
-        - 长期记忆：异步提取用户偏好和保存重要情景
+        使用新的统一记忆管理器处理短期和长期记忆
         """
         try:
-            # 使用异步任务更新记忆系统（不阻塞主流程）
-            asyncio.create_task(
-                self.memory_service.update_memories_async(
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    message=message,
-                    response=response,
-                    intent=intent,
-                    sources=sources
-                )
+            # 使用统一记忆管理器处理对话
+            result = await self.memory_manager.process_conversation(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                message=message,
+                response=response,
+                intent=intent,
+                sources=sources
             )
             
-            app_logger.debug(f"已启动异步记忆更新任务: {user_id}::{conversation_id}")
+            # 记录处理结果
+            if result.get("success"):
+                short_term_result = result.get("short_term", {})
+                long_term_result = result.get("long_term", {})
+                
+                if short_term_result.get("stored"):
+                    app_logger.info(f"对话已保存到短期记忆: {user_id}")
+                
+                if long_term_result.get("stored"):
+                    importance = long_term_result.get("importance_score", 0)
+                    app_logger.info(f"对话已保存到长期记忆: {user_id}, 重要性: {importance:.2f}")
+            else:
+                app_logger.warning(f"记忆保存失败: {result.get('error', 'Unknown error')}")
                 
         except Exception as e:
-            app_logger.error(f"启动记忆更新任务失败: {e}")
+            app_logger.error(f"保存对话到记忆失败: {e}")
     
-    
-    async def process_stream_request(self, chat_request: "ChatRequest") -> AsyncGenerator[str, None]:
+    async def process_stream_request(self, request: "ChatRequest") -> AsyncGenerator[str, None]:
         """处理流式聊天请求"""
         try:
-            user_id = getattr(chat_request, 'user_id', 'default_user')
-            conversation_id = chat_request.conversationId
+            user_id = request.user_id
+            conversation_id = request.conversationId
+            message = request.message
+            attachments = request.attachments or []
             
-            # 提取附件数据
-            attachments_data = self.extract_attachments_data(chat_request.attachments)
+            app_logger.info(f"处理聊天请求: {user_id}::{conversation_id}")
             
-            # 提取用户上下文信息（只调用一次）
-            user_profile, contextual_prompt, short_term_context, recent_conversations = await self.extract_user_context(
-                chat_request.message, user_id, conversation_id
-            )
+            # 1. 提取附件数据
+            attachments_data = self.extract_attachments_data(attachments)
             
-            # 直接调用意图识别服务（避免通过process_query_with_intent重复调用extract_user_context）
+            # 2. 提取用户上下文
+            user_profile, contextual_prompt, short_term_context, recent_conversations = \
+                await self.extract_user_context(user_id, conversation_id, message)
+            
+            # 3. 意图识别
             intent_result = await self.intent_service.process_intent(
-                chat_request.message, attachments_data, user_id, recent_conversations
+                message=message,
+                attachments=attachments_data,
+                user_id=user_id,
+                recent_conversations=recent_conversations
             )
+            intent = intent_result.intent.value
             
-            app_logger.info(f"意图识别结果 - 意图: {intent_result.intent.value}, 置信度: {intent_result.confidence}, 推理: {intent_result.reasoning}")
+            app_logger.info(f"识别意图: {intent}")
             
-            # 根据意图结果准备参数
+            # 4. 处理不同意图
+            # 准备意图相关的参数
             file_content = None
             web_content = None
             search_results = None
@@ -348,59 +335,62 @@ class EnhancedChatService:
                 web_content = intent_result.content
             elif intent_result.intent == IntentType.SEARCH:
                 search_results = intent_result.search_results
-                # 提取搜索来源
                 if search_results and search_results.get("results"):
                     sources = [result["url"] for result in search_results["results"]]
-            elif intent_result.intent == IntentType.CODE:
-                # 代码执行功能
-                pass
             
-            intent = intent_result.intent.value
-            reasoning = intent_result.reasoning
-            
-            # 发送元数据
-            metadata = {
-                "type": "metadata",
-                "intent": intent,
-                "sources": sources,
-                "search_results": search_results.get("results", []) if search_results else []
-            }
-            yield f"data: {json.dumps(metadata, ensure_ascii=False)}\n\n"
-            
-            # 收集完整的AI响应
-            full_response = ""
-            
-            # 生成流式响应
-            async for chunk in self.generate_stream_response(
-                message=chat_request.message,
-                intent=intent,
-                file_content=file_content,
-                web_content=web_content,
-                search_results=search_results,
-                user_profile=user_profile,
-                contextual_prompt=contextual_prompt,
-                short_term_context=short_term_context,
-                user_id=user_id
-            ):
-                # 提取chunk内容
-                chunk_data = json.loads(chunk.replace("data: ", "").strip())
-                if chunk_data.get("type") == "content":
-                    full_response += chunk_data.get("content", "")
-                yield chunk
-            
-            # 保存对话到长短期记忆
-            await self.save_conversation_to_memory(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                message=chat_request.message,
-                response=full_response,
-                intent=intent,
-                sources=sources
-            )
+            if intent == IntentType.CODE:
+                # 代码执行流程
+                code_response = await self.ai_service.generate_response(
+                    user_message=message,
+                    intent=intent,
+                    file_content=file_content,
+                    web_content=web_content,
+                    search_results=search_results,
+                    user_identity=user_profile,
+                    contextual_prompt=contextual_prompt,
+                    short_term_context=short_term_context
+                )
+                
+                # 流式发送代码执行结果
+                async for chunk in self.handle_code_execution(user_id, code_response):
+                    yield chunk
+                
+                # 保存对话到记忆
+                await self.save_conversation_to_memory(
+                    user_id, conversation_id, message, code_response, intent, sources
+                )
+                
+            else:
+                # 普通对话流程 - 收集完整响应
+                full_response = ""
+                
+                async for chunk in self.generate_stream_response(
+                    message=message,
+                    intent=intent,
+                    file_content=file_content,
+                    web_content=web_content,
+                    search_results=search_results,
+                    user_identity=user_profile,
+                    contextual_prompt=contextual_prompt,
+                    short_term_context=short_term_context
+                ):
+                    # 收集完整响应内容
+                    full_response += chunk
+                    
+                    # 格式化chunk为JSON格式
+                    chunk_data = {
+                        "type": "content",
+                        "content": chunk
+                    }
+                    yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+                
+                # 保存对话到记忆
+                await self.save_conversation_to_memory(
+                    user_id, conversation_id, message, full_response, intent, sources
+                )
             
         except Exception as e:
-            app_logger.error(f"处理流式聊天请求失败: {e}")
-            # 返回错误信息
+            app_logger.error(f"处理聊天请求失败: {e}")
             error_data = {
                 "type": "error",
                 "content": f"处理请求时发生错误: {str(e)}"
@@ -408,5 +398,5 @@ class EnhancedChatService:
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
 
-# 创建全局实例
-enhanced_chat_service = EnhancedChatService()
+# 全局实例
+chat_service = ChatService()

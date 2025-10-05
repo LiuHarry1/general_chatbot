@@ -6,7 +6,7 @@
 export const UI_CONSTANTS = {
   // 延迟时间
   DEBOUNCE_DELAY: 50,
-  URL_DETECTION_DELAY: 1000,
+  URL_DETECTION_DELAY: 1500, // 增加URL检测延迟，避免频繁触发
   
   // 尺寸
   MAX_TEXTAREA_HEIGHT: 120,

@@ -1,6 +1,6 @@
 """
-Qdrant向量数据库管理器
-现代化的向量存储和语义搜索实现
+Qdrant Vector Database Manager
+Modern vector storage and semantic search implementation
 """
 import asyncio
 import json
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class QdrantManager:
-    """Qdrant向量数据库管理器"""
+    """Qdrant vector database manager"""
     
     def __init__(self, host: str = "localhost", port: int = 6333):
         self.client = QdrantClient(host=host, port=port)
@@ -297,12 +297,17 @@ class QdrantManager:
     async def health_check(self) -> Dict[str, Any]:
         """健康检查"""
         try:
-            health = self.client.health_check()
+            # 使用get_collections方法检查连接状态
+            info = self.client.get_collections()
             return {
                 "status": "ok",
-                "message": f"Qdrant is reachable, version: {health.version}",
+                "message": f"Qdrant is reachable, collections: {len(info.collections)}",
                 "host": self.host,
-                "port": self.port
+                "port": self.port,
+                "details": {
+                    "collections_count": len(info.collections),
+                    "collections": [col.name for col in info.collections]
+                }
             }
         except Exception as e:
             return {

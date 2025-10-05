@@ -1,6 +1,6 @@
 """
-嵌入服务
-简化的通义千问嵌入实现
+Embedding Service
+Simplified Dashscope embedding implementation
 """
 import httpx
 from typing import List, Dict, Any
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """简化的嵌入服务"""
+    """Simplified embedding service"""
     
     def __init__(self, api_key: str = None, model: str = "text-embedding-v1"):
         self.api_key = api_key or settings.dashscope_api_key

@@ -1,6 +1,6 @@
 """
-语义搜索服务
-基于向量相似度的智能记忆检索
+Semantic Search Service
+Intelligent memory retrieval based on vector similarity
 """
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SemanticSearchService:
-    """语义搜索服务"""
+    """Semantic search service"""
     
     def __init__(self):
         self.embedding_service = EmbeddingService()
@@ -150,10 +150,18 @@ class SemanticSearchService:
                 result["result_type"] = "knowledge_entity"
                 all_results.append(result)
             
-            # 按综合评分排序
-            all_results.sort(key=lambda x: x["comprehensive_score"], reverse=True)
+            # 去重：基于内容去重，保留评分最高的
+            unique_results = {}
+            for result in all_results:
+                content = result.get("content", "")
+                if content not in unique_results or result["comprehensive_score"] > unique_results[content]["comprehensive_score"]:
+                    unique_results[content] = result
             
-            return all_results
+            # 按综合评分排序
+            final_results = list(unique_results.values())
+            final_results.sort(key=lambda x: x["comprehensive_score"], reverse=True)
+            
+            return final_results
             
         except Exception as e:
             app_logger.error(f"合并排序结果失败: {e}")

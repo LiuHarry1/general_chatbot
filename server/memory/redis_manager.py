@@ -1,6 +1,6 @@
 """
-Redis缓存管理器
-现代化的缓存和用户画像存储实现
+Redis Cache Manager
+Modern cache and user profile storage implementation
 """
 import json
 import redis
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class RedisManager:
-    """Redis缓存管理器"""
+    """Redis cache manager"""
     
     def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0):
         self.redis_conn = redis.Redis(host=host, port=port, db=db, decode_responses=True)
@@ -200,16 +200,6 @@ class RedisManager:
             logger.error(f"Error retrieving memory index {memory_id}: {e}")
             return None
     
-    async def increment_access_count(self, memory_id: str) -> int:
-        """增加访问计数"""
-        try:
-            key = f"{self.key_prefixes['memory_index']}{memory_id}"
-            count = self.redis_conn.hincrby(key, "access_count", 1)
-            return count
-        except Exception as e:
-            logger.error(f"Error incrementing access count for {memory_id}: {e}")
-            return 0
-    
     async def get_user_memory_stats(self, user_id: str) -> Dict[str, Any]:
         """获取用户记忆统计"""
         try:
@@ -295,6 +285,117 @@ class RedisManager:
                 "port": self.port,
                 "db": self.db
             }
+    
+    async def store_conversation(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+        response: str,
+        metadata: Dict[str, Any] = None
+    ) -> bool:
+        """存储单轮对话"""
+        try:
+            conversation_key = f"conversation:{user_id}:{conversation_id}"
+            timestamp = datetime.now().isoformat()
+            
+            conversation_data = {
+                "message": message,
+                "response": response,
+                "timestamp": timestamp,
+                "metadata": json.dumps(metadata or {}, ensure_ascii=False)
+            }
+            
+            # 存储对话数据
+            self.redis_conn.hset(
+                conversation_key,
+                mapping=conversation_data
+            )
+            
+            # 设置过期时间（7天）
+            self.redis_conn.expire(conversation_key, 7 * 24 * 3600)
+            
+            # 添加到用户对话列表
+            user_conversations_key = f"user_conversations:{user_id}"
+            self.redis_conn.lpush(user_conversations_key, conversation_id)
+            self.redis_conn.expire(user_conversations_key, 7 * 24 * 3600)
+            
+            logger.info(f"Stored conversation for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to store conversation: {e}")
+            return False
+    
+    async def get_recent_conversations(
+        self,
+        user_id: str,
+        conversation_id: str,
+        limit: int = 3
+    ) -> List[Dict[str, Any]]:
+        """获取最近的对话（排除当前对话）"""
+        try:
+            conversations = []
+            user_conversations_key = f"user_conversations:{user_id}"
+            
+            # 获取更多的对话ID列表，以便在排除当前对话后仍有足够的数量
+            max_fetch = limit * 2  # 获取更多，确保排除当前对话后还有足够的数量
+            all_conversation_ids = self.redis_conn.lrange(
+                user_conversations_key, 0, max_fetch - 1
+            )
+            
+            # 排除当前对话ID，并限制返回数量
+            filtered_ids = []
+            for conv_id in all_conversation_ids:
+                # 处理可能的字节或字符串类型
+                try:
+                    if isinstance(conv_id, bytes):
+                        conv_id_str = conv_id.decode('utf-8')
+                    else:
+                        conv_id_str = str(conv_id)
+                    
+                    if conv_id_str != conversation_id:
+                        filtered_ids.append(conv_id_str)
+                except Exception as e:
+                    logger.warning(f"Failed to process conversation ID: {conv_id}, error: {e}")
+                    continue
+            
+            filtered_ids = filtered_ids[:limit]
+            
+            for conv_id in filtered_ids:
+                conversation_key = f"conversation:{user_id}:{conv_id}"
+                
+                # 获取对话数据
+                conv_data = self.redis_conn.hgetall(conversation_key)
+                if conv_data:
+                    # 解码Redis返回的字节数据
+                    decoded_data = {}
+                    for k, v in conv_data.items():
+                        if isinstance(k, bytes):
+                            key = k.decode('utf-8')
+                        else:
+                            key = str(k)
+                        
+                        if isinstance(v, bytes):
+                            value = v.decode('utf-8')
+                        else:
+                            value = str(v)
+                        
+                        decoded_data[key] = value
+                    
+                    conversations.append({
+                        "conversation_id": conv_id,
+                        "message": decoded_data.get("message", ""),
+                        "response": decoded_data.get("response", ""),
+                        "timestamp": decoded_data.get("timestamp", ""),
+                        "metadata": decoded_data.get("metadata", "{}")
+                    })
+            
+            return conversations
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent conversations: {e}")
+            return []
 
 
 # 全局实例

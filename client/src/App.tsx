@@ -92,7 +92,7 @@ const App: React.FC = () => {
       await sendMessageStream(
         {
           message: content,
-          conversationId: currentConversationId || '1',
+          conversationId: userMessage.conversationId || currentConversationId || '1',
           attachments: messageAttachments
         },
         // onChunk - 处理内容块

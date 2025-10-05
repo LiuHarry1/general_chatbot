@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from models import ChatRequest
-from services.chat_service import enhanced_chat_service
+from services.chat_service import chat_service
 from utils.logger import app_logger
 
 # 创建路由器
@@ -22,8 +22,8 @@ async def chat_stream(chat_request: ChatRequest):
         try:
             app_logger.info(f"收到流式聊天请求: {chat_request.message[:100]}...")
             
-            # 使用EnhancedChatService处理流式聊天请求
-            async for chunk in enhanced_chat_service.process_stream_request(chat_request):
+            # 使用ChatService处理流式聊天请求
+            async for chunk in chat_service.process_stream_request(chat_request):
                 yield chunk
             
             # 发送结束信号
