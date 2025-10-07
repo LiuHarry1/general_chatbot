@@ -6,6 +6,9 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
+from collections import deque
+import threading
+import uuid
 
 from utils.logger import app_logger
 from memory.redis_manager import redis_manager
@@ -22,10 +25,34 @@ class ShortTermMemory:
         
         # 短期记忆配置
         self.max_tokens = 3000  # 3k token阈值
+        self.warning_tokens = 2500  # 警告阈值
         self.max_recent_turns = 3  # 保留最近3轮对话
+        
+        # 异步压缩配置
+        self.compression_queue = deque()  # 压缩任务队列
+        self.compression_lock = threading.Lock()  # 队列锁
+        self.max_concurrent_compressions = 3  # 最大并发压缩数
+        self.max_queue_size = 100  # 最大队列大小
+        self.active_compressions = 0  # 当前活跃压缩数
+        
+        # 递增总结配置
+        self.summary_layers = {
+            'L1': {'max_turns': 2, 'description': '单轮对话摘要'},  # 最近2轮
+            'L2': {'max_turns': 5, 'description': '多轮对话摘要'},  # 最近5轮
+            'L3': {'max_turns': 10, 'description': '主题聚类摘要'}   # 最近10轮
+        }
+        
+        # 异步压缩处理器将在第一次使用时启动
+        self._compression_processor_started = False
         
         app_logger.info(f"ShortTermMemory initialized - enabled: {enabled}")
     
+    async def _ensure_compression_processor_started(self) -> None:
+        """确保压缩处理器已启动"""
+        if not self._compression_processor_started and self.enabled:
+            self._compression_processor_started = True
+            asyncio.create_task(self._compression_processor())
+            app_logger.info("Compression processor started")
     
     async def get_recent_context(
         self,
@@ -35,6 +62,7 @@ class ShortTermMemory:
     ) -> Dict[str, Any]:
         """获取最近的对话上下文：Redis优先，DB回退"""
         if not self.enabled:
+            app_logger.info(f"🔍 [SHORT-TERM] Memory disabled for {user_id}:{conversation_id}")
             return {
                 "context": "",
                 "metadata": {
@@ -44,11 +72,15 @@ class ShortTermMemory:
             }
         
         try:
+            app_logger.info(f"🔍 [SHORT-TERM] Getting context for {user_id}:{conversation_id} (limit={limit})")
+            
             # 1. 优先从Redis获取短期记忆
             redis_context = await self._get_from_redis(user_id, conversation_id)
             
             if redis_context:
                 # Redis中有数据，直接返回
+                app_logger.info(f"📝 [SHORT-TERM] Retrieved from Redis for {user_id}:{conversation_id}")
+                app_logger.info(f"📄 [SHORT-TERM] Context content: {redis_context[:200]}...")
                 return {
                     "context": redis_context,
                     "metadata": {
@@ -66,7 +98,10 @@ class ShortTermMemory:
                 limit=limit
             )
             
+            app_logger.info(f"📊 [SHORT-TERM] Retrieved {len(recent_messages)} messages from database for {user_id}:{conversation_id}")
+            
             if not recent_messages:
+                app_logger.info(f"📭 [SHORT-TERM] No messages found for {user_id}:{conversation_id}")
                 return {
                     "context": "",
                     "metadata": {
@@ -79,13 +114,16 @@ class ShortTermMemory:
             
             # 3. 检查是否需要压缩
             total_tokens = self._count_tokens_for_messages(recent_messages)
+            app_logger.info(f"🔢 [SHORT-TERM] Token count: {total_tokens}/{self.max_tokens} for {user_id}:{conversation_id}")
             
             if total_tokens > self.max_tokens:
                 # 超过3k token，需要压缩
+                app_logger.info(f"🗜️ [SHORT-TERM] Compressing messages for {user_id}:{conversation_id}")
                 await self._compress_and_store(user_id, conversation_id, recent_messages)
                 
                 # 重新从Redis获取压缩后的数据
                 redis_context = await self._get_from_redis(user_id, conversation_id)
+                app_logger.info(f"📄 [SHORT-TERM] Compressed context: {redis_context[:200]}...")
                 return {
                     "context": redis_context or "",
                     "metadata": {
@@ -98,7 +136,8 @@ class ShortTermMemory:
                 }
             else:
                 # 未超过3k token，直接存储到Redis
-                for msg in recent_messages:
+                app_logger.info(f"💾 [SHORT-TERM] Storing {len(recent_messages)} messages to Redis for {user_id}:{conversation_id}")
+                for i, msg in enumerate(recent_messages):
                     await self.redis_manager.store_conversation(
                         user_id=user_id,
                         conversation_id=conversation_id,
@@ -106,9 +145,11 @@ class ShortTermMemory:
                         response=msg.get('ai_response', ''),
                         metadata={}
                     )
+                    app_logger.info(f"💬 [SHORT-TERM] Message {i+1}: User: {msg.get('user_message', '')[:50]}... | AI: {msg.get('ai_response', '')[:50]}...")
                 
                 # 格式化并返回
                 context = self._format_recent_messages(recent_messages)
+                app_logger.info(f"📄 [SHORT-TERM] Formatted context: {context[:200]}...")
                 return {
                     "context": context,
                     "metadata": {
@@ -159,12 +200,29 @@ class ShortTermMemory:
         return "\n".join(formatted)
     
     def _format_conversations(self, conversations: List[Dict[str, Any]]) -> str:
-        """格式化对话历史"""
+        """格式化对话历史（去重处理）"""
         if not conversations:
             return ""
         
-        formatted = []
+        # 去重处理：使用消息内容作为key
+        seen_messages = set()
+        unique_conversations = []
+        
         for conv in conversations:
+            message = conv.get("message", "")
+            response = conv.get("response", "")
+            
+            # 创建消息的唯一标识
+            message_key = f"{message}|{response}"
+            
+            if message_key not in seen_messages:
+                seen_messages.add(message_key)
+                unique_conversations.append(conv)
+        
+        app_logger.info(f"📊 [SHORT-TERM] Filtered {len(conversations)} -> {len(unique_conversations)} unique conversations")
+        
+        formatted = []
+        for conv in unique_conversations:
             timestamp = conv.get("timestamp", "")
             message = conv.get("message", "")
             response = conv.get("response", "")
@@ -208,11 +266,29 @@ class ShortTermMemory:
         response: str,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """智能存储对话：根据token数量决定是否压缩"""
+        """智能存储对话：使用异步压缩和递增总结"""
         if not self.enabled:
+            app_logger.info(f"🔍 [SHORT-TERM] Memory disabled, skipping storage for {user_id}:{conversation_id}")
             return False
         
         try:
+            app_logger.info(f"💾 [SHORT-TERM] Smart storing conversation for {user_id}:{conversation_id}")
+            app_logger.info(f"💬 [SHORT-TERM] New message: User: {message[:100]}...")
+            app_logger.info(f"🤖 [SHORT-TERM] New response: AI: {response[:100]}...")
+            
+            # 确保压缩处理器已启动
+            await self._ensure_compression_processor_started()
+            
+            # 先直接存储当前对话
+            await self.redis_manager.store_conversation(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                message=message,
+                response=response,
+                metadata=metadata or {}
+            )
+            app_logger.info(f"✅ [SHORT-TERM] Stored conversation to Redis for {user_id}:{conversation_id}")
+            
             # 获取当前对话的所有消息
             from database import conversation_repo
             all_messages = conversation_repo.get_current_conversation_messages(
@@ -221,29 +297,26 @@ class ShortTermMemory:
             )
             
             # 计算总token数
-            total_tokens = self._count_tokens_for_messages(all_messages + [
-                {'user_message': message, 'ai_response': response}
-            ])
+            total_tokens = self._count_tokens_for_messages(all_messages)
+            app_logger.info(f"🔢 [SHORT-TERM] Total messages: {len(all_messages)}, Total tokens: {total_tokens}/{self.max_tokens}")
             
-            if total_tokens > self.max_tokens:
-                # 超过3k token，需要压缩
-                await self._compress_and_store(user_id, conversation_id, all_messages + [
-                    {'user_message': message, 'ai_response': response}
-                ])
-            else:
-                # 未超过3k token，直接存储
-                await self.redis_manager.store_conversation(
+            # 检查是否需要异步压缩
+            if total_tokens > self.warning_tokens:
+                priority = 'high' if total_tokens > self.max_tokens else 'normal'
+                app_logger.info(f"⚠️ [SHORT-TERM] Token limit exceeded, queuing compression task with priority: {priority}")
+                # 添加到异步压缩队列
+                await self._queue_compression_task(
                     user_id=user_id,
                     conversation_id=conversation_id,
-                    message=message,
-                    response=response,
-                    metadata=metadata or {}
+                    priority=priority
                 )
+            else:
+                app_logger.info(f"✅ [SHORT-TERM] Token count within limits, no compression needed")
             
             return True
             
         except Exception as e:
-            app_logger.error(f"Failed to smart store conversation: {e}")
+            app_logger.error(f"❌ [SHORT-TERM] Failed to smart store conversation: {e}")
             return False
     
     async def clear_user_data(self, user_id: str) -> bool:
@@ -274,16 +347,48 @@ class ShortTermMemory:
             # 检查Redis连接
             redis_health = await self.redis_manager.health_check()
             
+            # 获取压缩队列状态
+            with self.compression_lock:
+                queue_size = len(self.compression_queue)
+                queue_tasks = [
+                    {
+                        'id': task.get('id', 'unknown'),
+                        'user_id': task.get('user_id', 'unknown'),
+                        'conversation_id': task.get('conversation_id', 'unknown'),
+                        'priority': task.get('priority', 'normal'),
+                        'status': task.get('status', 'queued'),
+                        'created_at': task.get('created_at', 'unknown')
+                    }
+                    for task in list(self.compression_queue)
+                ]
+            
             return {
                 "status": "ok",
                 "message": "Short-term memory is healthy",
                 "components": {
-                    "redis_manager": redis_health["status"]
+                    "redis_manager": redis_health["status"],
+                    "async_compression": "enabled",
+                    "incremental_summary": "enabled"
                 },
                 "config": {
                     "max_tokens": self.max_tokens,
+                    "warning_tokens": self.warning_tokens,
                     "max_recent_turns": self.max_recent_turns,
+                    "max_concurrent_compressions": self.max_concurrent_compressions,
+                    "max_queue_size": self.max_queue_size,
                     "enabled": self.enabled
+                },
+                "compression_status": {
+                    "queue_size": queue_size,
+                    "active_compressions": self.active_compressions,
+                    "queued_tasks": queue_tasks
+                },
+                "summary_layers": {
+                    layer: {
+                        "max_turns": config["max_turns"],
+                        "description": config["description"]
+                    }
+                    for layer, config in self.summary_layers.items()
                 }
             }
             
@@ -490,36 +595,437 @@ class ShortTermMemory:
             return ""
     
     async def _get_from_redis(self, user_id: str, conversation_id: str) -> str:
-        """从Redis获取短期记忆上下文"""
+        """从Redis获取短期记忆上下文（支持分层摘要）"""
         try:
+            app_logger.info(f"🔍 [SHORT-TERM] Getting context from Redis for {user_id}:{conversation_id}")
+            
             # 获取Redis中的对话数据
             conversations = await self.redis_manager.get_recent_conversations(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 limit=10
             )
+            app_logger.info(f"📊 [SHORT-TERM] Retrieved {len(conversations)} conversations from Redis")
             
-            if not conversations:
-                return ""
+            # 获取分层摘要
+            layer_summaries = await self._get_layer_summaries(user_id, conversation_id)
+            app_logger.info(f"📋 [SHORT-TERM] Layer summaries: {list(layer_summaries.keys())}")
             
-            # 获取摘要信息
-            summarized_context = await self._get_summarized_context(user_id, conversation_id)
+            # 打印每层摘要内容
+            for layer, summary in layer_summaries.items():
+                app_logger.info(f"📄 [SHORT-TERM] {layer} Summary: {summary[:100]}...")
             
             # 组合上下文
             context_parts = []
             
-            if summarized_context:
-                context_parts.append(f"Earlier conversation summary:\n{summarized_context}")
+            # 添加分层摘要（从最旧到最新）
+            if layer_summaries.get('L3'):
+                context_parts.append(f"Earlier conversation summary (L3):\n{layer_summaries['L3']}")
+                app_logger.info(f"📝 [SHORT-TERM] Added L3 summary to context")
             
+            if layer_summaries.get('L2'):
+                context_parts.append(f"Recent conversation summary (L2):\n{layer_summaries['L2']}")
+                app_logger.info(f"📝 [SHORT-TERM] Added L2 summary to context")
+            
+            if layer_summaries.get('L1'):
+                context_parts.append(f"Latest conversation summary (L1):\n{layer_summaries['L1']}")
+                app_logger.info(f"📝 [SHORT-TERM] Added L1 summary to context")
+            
+            # 添加最近的对话
             if conversations:
                 recent_context = self._format_conversations(conversations)
-                context_parts.append(f"Recent conversation:\n{recent_context}")
+                context_parts.append(f"Current conversation:\n{recent_context}")
+                app_logger.info(f"📝 [SHORT-TERM] Added {len(conversations)} recent conversations to context")
             
-            return "\n\n".join(context_parts)
+            final_context = "\n\n".join(context_parts)
+            app_logger.info(f"📄 [SHORT-TERM] Final context length: {len(final_context)} characters")
+            
+            return final_context
             
         except Exception as e:
-            app_logger.error(f"Failed to get from Redis: {e}")
+            app_logger.error(f"❌ [SHORT-TERM] Failed to get from Redis: {e}")
             return ""
+
+    async def _get_layer_summaries(
+        self,
+        user_id: str,
+        conversation_id: str
+    ) -> Dict[str, str]:
+        """获取分层摘要"""
+        try:
+            summaries = {}
+            for layer in ['L1', 'L2', 'L3']:
+                summary_key = f"conversation_summary:{user_id}:{conversation_id}:{layer}"
+                # 使用异步方式执行Redis操作
+                summary = await asyncio.get_event_loop().run_in_executor(
+                    None, self.redis_manager.redis_conn.get, summary_key
+                )
+                if summary:
+                    if isinstance(summary, bytes):
+                        summaries[layer] = summary.decode('utf-8')
+                    else:
+                        summaries[layer] = str(summary)
+            return summaries
+        except Exception as e:
+            app_logger.error(f"Failed to get layer summaries: {e}")
+            return {}
+
+    async def _queue_compression_task(
+        self,
+        user_id: str,
+        conversation_id: str,
+        priority: str = 'normal'
+    ) -> None:
+        """将压缩任务添加到队列"""
+        try:
+            task = {
+                'id': str(uuid.uuid4()),
+                'user_id': user_id,
+                'conversation_id': conversation_id,
+                'priority': priority,
+                'created_at': datetime.now().isoformat(),
+                'status': 'queued'
+            }
+            
+            with self.compression_lock:
+                # 检查队列大小限制
+                if len(self.compression_queue) >= self.max_queue_size:
+                    # 队列已满，丢弃最老的任务
+                    if priority == 'high':
+                        # 高优先级任务，丢弃最老的普通优先级任务
+                        old_task = None
+                        for i, queued_task in enumerate(self.compression_queue):
+                            if queued_task.get('priority') == 'normal':
+                                old_task = self.compression_queue.pop(i)
+                                break
+                        if old_task:
+                            app_logger.warning(f"Queue full, discarded normal priority task {old_task.get('id', 'unknown')}")
+                        else:
+                            app_logger.warning(f"Queue full, cannot add high priority task {task['id']}")
+                            return
+                    else:
+                        # 普通优先级任务，丢弃最老的任务
+                        old_task = self.compression_queue.popleft()
+                        app_logger.warning(f"Queue full, discarded task {old_task.get('id', 'unknown')}")
+                
+                # 添加新任务
+                if priority == 'high':
+                    # 高优先级任务插入到队列前面
+                    self.compression_queue.appendleft(task)
+                else:
+                    # 普通优先级任务插入到队列后面
+                    self.compression_queue.append(task)
+            
+            app_logger.info(f"Queued compression task for {user_id}:{conversation_id} with priority {priority}")
+            
+        except Exception as e:
+            app_logger.error(f"Failed to queue compression task: {e}")
+
+    async def _compression_processor(self) -> None:
+        """异步压缩处理器"""
+        while self.enabled:
+            try:
+                # 检查是否有活跃压缩任务和队列任务
+                if self.active_compressions < self.max_concurrent_compressions and self.compression_queue:
+                    # 获取下一个任务
+                    with self.compression_lock:
+                        if not self.compression_queue:
+                            continue
+                        task = self.compression_queue.popleft()
+                    
+                    # 更新任务状态
+                    task['status'] = 'processing'
+                    
+                    # 线程安全地增加活跃压缩计数
+                    with self.compression_lock:
+                        self.active_compressions += 1
+                    
+                    # 异步处理压缩任务
+                    asyncio.create_task(self._process_compression_task(task))
+                
+                # 等待一段时间再检查
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                app_logger.error(f"Compression processor error: {e}")
+                await asyncio.sleep(5)
+
+    async def _process_compression_task(self, task: Dict[str, Any]) -> None:
+        """处理单个压缩任务"""
+        try:
+            user_id = task['user_id']
+            conversation_id = task['conversation_id']
+            task_id = task['id']
+            
+            app_logger.info(f"Processing compression task {task_id} for {user_id}:{conversation_id}")
+            
+            # 获取对话消息
+            from database import conversation_repo
+            all_messages = conversation_repo.get_current_conversation_messages(
+                conversation_id=conversation_id,
+                limit=100
+            )
+            
+            if not all_messages:
+                return
+            
+            # 执行递增总结压缩
+            await self._incremental_compression(user_id, conversation_id, all_messages)
+            
+            app_logger.info(f"Completed compression task {task_id} for {user_id}:{conversation_id}")
+            
+        except Exception as e:
+            app_logger.error(f"Failed to process compression task {task.get('id', 'unknown')}: {e}")
+        finally:
+            # 线程安全地减少活跃压缩计数
+            with self.compression_lock:
+                self.active_compressions = max(0, self.active_compressions - 1)
+
+    async def _incremental_compression(
+        self,
+        user_id: str,
+        conversation_id: str,
+        messages: List[Dict[str, Any]]
+    ) -> bool:
+        """递增总结压缩"""
+        try:
+            total_messages = len(messages)
+            if total_messages < 6:  # 少于3轮对话不需要压缩
+                return True
+            
+            # 获取现有的摘要层
+            existing_summaries = await self._get_existing_summaries(user_id, conversation_id)
+            
+            # 分层处理 - 按层级从大到小处理
+            new_summaries = {}
+            messages_to_keep = []
+            
+            # 确定需要保留的消息数量（取最大的层）
+            max_keep_turns = max(
+                self.summary_layers['L1']['max_turns'],
+                self.summary_layers['L2']['max_turns'], 
+                self.summary_layers['L3']['max_turns']
+            )
+            
+            # 保留最近的消息
+            if total_messages > max_keep_turns:
+                messages_to_keep = messages[-max_keep_turns:]
+                messages_to_summarize = messages[:-max_keep_turns]
+            else:
+                messages_to_keep = messages
+                messages_to_summarize = []
+            
+            # 如果没有需要摘要的消息，直接返回
+            if not messages_to_summarize:
+                app_logger.info(f"No messages need summarization for {user_id}:{conversation_id}")
+                return True
+            
+            # 根据消息数量决定生成哪些层的摘要
+            if len(messages_to_summarize) >= 8:  # 足够生成L3摘要
+                l3_summary = await self._generate_layer_summary(
+                    'L3', messages_to_summarize, existing_summaries.get('L3')
+                )
+                if l3_summary:
+                    new_summaries['L3'] = l3_summary
+                
+                # 生成L2摘要（从L3摘要中提取或重新生成）
+                l2_summary = await self._generate_layer_summary(
+                    'L2', messages_to_summarize[-5:], existing_summaries.get('L2')
+                )
+                if l2_summary:
+                    new_summaries['L2'] = l2_summary
+                    
+            elif len(messages_to_summarize) >= 3:  # 足够生成L2摘要
+                l2_summary = await self._generate_layer_summary(
+                    'L2', messages_to_summarize, existing_summaries.get('L2')
+                )
+                if l2_summary:
+                    new_summaries['L2'] = l2_summary
+            
+            # 总是生成L1摘要（如果有多余消息）
+            if len(messages_to_summarize) >= 1:
+                l1_summary = await self._generate_layer_summary(
+                    'L1', messages_to_summarize[-2:], existing_summaries.get('L1')
+                )
+                if l1_summary:
+                    new_summaries['L1'] = l1_summary
+            
+            # 存储新的摘要
+            if new_summaries:
+                await self._store_layer_summaries(user_id, conversation_id, new_summaries)
+            
+            # 清理Redis中的旧消息，只保留需要保留的消息
+            await self._cleanup_old_messages(user_id, conversation_id, messages_to_keep)
+            
+            app_logger.info(f"Incremental compression completed for {user_id}:{conversation_id} - kept {len(messages_to_keep)} messages, generated {len(new_summaries)} summaries")
+            return True
+            
+        except Exception as e:
+            app_logger.error(f"Failed to perform incremental compression: {e}")
+            return False
+
+    async def _get_existing_summaries(
+        self,
+        user_id: str,
+        conversation_id: str
+    ) -> Dict[str, str]:
+        """获取现有的摘要层"""
+        try:
+            summaries = {}
+            for layer in ['L1', 'L2', 'L3']:
+                summary_key = f"conversation_summary:{user_id}:{conversation_id}:{layer}"
+                # 使用异步方式执行Redis操作
+                summary = await asyncio.get_event_loop().run_in_executor(
+                    None, self.redis_manager.redis_conn.get, summary_key
+                )
+                if summary:
+                    if isinstance(summary, bytes):
+                        summaries[layer] = summary.decode('utf-8')
+                    else:
+                        summaries[layer] = str(summary)
+            return summaries
+        except Exception as e:
+            app_logger.error(f"Failed to get existing summaries: {e}")
+            return {}
+
+    async def _generate_layer_summary(
+        self,
+        layer: str,
+        messages: List[Dict[str, Any]],
+        existing_summary: Optional[str] = None
+    ) -> Optional[str]:
+        """生成指定层的摘要"""
+        try:
+            if not messages:
+                return None
+            
+            # 构建对话文本
+            conversation_text = ""
+            for msg in messages:
+                conversation_text += f"用户: {msg.get('user_message', '')}\n"
+                conversation_text += f"助手: {msg.get('ai_response', '')}\n"
+            
+            if not conversation_text.strip():
+                return None
+            
+            # 如果有现有摘要，进行递增更新
+            if existing_summary:
+                summary_prompt = f"""请基于现有摘要和新对话内容，生成更新的摘要：
+
+现有摘要：
+{existing_summary}
+
+新对话内容：
+{conversation_text}
+
+要求：
+1. 保留现有摘要中的重要信息
+2. 整合新对话的关键内容
+3. 保持摘要简洁明了（{self.summary_layers[layer]['description']}）
+4. 使用中文
+
+更新后的摘要："""
+            else:
+                summary_prompt = f"""请为以下对话生成摘要：
+
+{conversation_text}
+
+要求：
+1. 用2-3句话概括对话的主要内容
+2. 保留重要的用户需求和AI的回答要点
+3. 使用中文，语言简洁明了
+4. 这是{self.summary_layers[layer]['description']}
+
+摘要："""
+            
+            # 使用AI生成摘要
+            from services.ai_service import ai_service
+            summary = await ai_service.generate_response(summary_prompt)
+            
+            return summary.strip() if summary else None
+            
+        except Exception as e:
+            app_logger.error(f"Failed to generate {layer} summary: {e}")
+            return None
+
+    async def _store_layer_summaries(
+        self,
+        user_id: str,
+        conversation_id: str,
+        summaries: Dict[str, str]
+    ) -> None:
+        """存储分层摘要"""
+        try:
+            for layer, summary in summaries.items():
+                if summary:
+                    summary_key = f"conversation_summary:{user_id}:{conversation_id}:{layer}"
+                    # 使用异步方式执行Redis操作
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self.redis_manager.redis_conn.setex(
+                            summary_key,
+                            86400 * 30,  # 30天过期
+                            summary
+                        )
+                    )
+                    app_logger.info(f"Stored {layer} summary for {user_id}:{conversation_id}")
+        except Exception as e:
+            app_logger.error(f"Failed to store layer summaries: {e}")
+
+    async def _cleanup_old_messages(
+        self,
+        user_id: str,
+        conversation_id: str,
+        keep_messages: List[Dict[str, Any]]
+    ) -> None:
+        """清理Redis中的旧消息"""
+        try:
+            # 获取Redis中的所有对话
+            conversations = await self.redis_manager.get_recent_conversations(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                limit=100
+            )
+            
+            if not conversations:
+                return
+            
+            # 获取需要保留的消息ID集合
+            keep_message_ids = set()
+            for msg in keep_messages:
+                # 假设消息有ID字段，如果没有则使用内容hash
+                msg_id = msg.get('id') or msg.get('message_id')
+                if not msg_id:
+                    # 使用内容生成唯一标识
+                    content = f"{msg.get('user_message', '')}{msg.get('ai_response', '')}"
+                    msg_id = str(hash(content))
+                keep_message_ids.add(str(msg_id))
+            
+            # 清理Redis中不在保留列表中的消息
+            deleted_count = 0
+            for conv in conversations:
+                conv_id = conv.get('id') or conv.get('message_id')
+                if not conv_id:
+                    content = f"{conv.get('message', '')}{conv.get('response', '')}"
+                    conv_id = str(hash(content))
+                
+                if str(conv_id) not in keep_message_ids:
+                    # 删除旧消息（这里需要根据Redis的具体键结构来实现）
+                    # 暂时使用通用的清理方法
+                    try:
+                        # 假设Redis中的键格式为: conversation:{user_id}:{conversation_id}:{message_id}
+                        message_key = f"conversation:{user_id}:{conversation_id}:{conv_id}"
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, self.redis_manager.redis_conn.delete, message_key
+                        )
+                        deleted_count += 1
+                    except Exception as delete_error:
+                        app_logger.warning(f"Failed to delete message {conv_id}: {delete_error}")
+            
+            app_logger.info(f"Cleanup completed for {user_id}:{conversation_id} - kept {len(keep_messages)} messages, deleted {deleted_count} old messages")
+            
+        except Exception as e:
+            app_logger.error(f"Failed to cleanup old messages: {e}")
 
 # 全局实例 - 默认启用
 short_term_memory = ShortTermMemory(enabled=True)

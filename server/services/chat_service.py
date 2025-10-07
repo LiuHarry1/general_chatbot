@@ -364,13 +364,24 @@ class ChatService:
                 # 普通对话流程 - 收集完整响应
                 full_response = ""
                 
+                # 转换用户画像数据格式为AI服务期望的格式
+                user_identity = {}
+                if user_profile and user_profile.get('identity'):
+                    identity_data = user_profile.get('identity', {})
+                    user_identity = {
+                        'name': identity_data.get('name'),
+                        'age': identity_data.get('age'),
+                        'location': identity_data.get('location'),
+                        'job': identity_data.get('job')
+                    }
+                
                 async for chunk in self.generate_stream_response(
                     message=message,
                     intent=intent,
                     file_content=file_content,
                     web_content=web_content,
                     search_results=search_results,
-                    user_identity=user_profile,
+                    user_identity=user_identity,
                     contextual_prompt=contextual_prompt,
                     short_term_context=short_term_context
                 ):

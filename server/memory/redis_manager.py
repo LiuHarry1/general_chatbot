@@ -296,10 +296,14 @@ class RedisManager:
     ) -> bool:
         """存储单轮对话"""
         try:
-            conversation_key = f"conversation:{user_id}:{conversation_id}"
+            # 为每次对话生成唯一ID（使用时间戳）
+            import time
+            unique_id = f"{conversation_id}_{int(time.time() * 1000000)}"
+            conversation_key = f"conversation:{user_id}:{unique_id}"
             timestamp = datetime.now().isoformat()
             
             conversation_data = {
+                "conversation_id": conversation_id,
                 "message": message,
                 "response": response,
                 "timestamp": timestamp,
@@ -317,10 +321,10 @@ class RedisManager:
             
             # 添加到用户对话列表
             user_conversations_key = f"user_conversations:{user_id}"
-            self.redis_conn.lpush(user_conversations_key, conversation_id)
+            self.redis_conn.lpush(user_conversations_key, unique_id)
             self.redis_conn.expire(user_conversations_key, 7 * 24 * 3600)
             
-            logger.info(f"Stored conversation for user {user_id}")
+            logger.info(f"Stored conversation for user {user_id} with unique_id {unique_id}")
             return True
             
         except Exception as e:
@@ -338,13 +342,14 @@ class RedisManager:
             conversations = []
             user_conversations_key = f"user_conversations:{user_id}"
             
-            # 获取更多的对话ID列表，以便在排除当前对话后仍有足够的数量
-            max_fetch = limit * 2  # 获取更多，确保排除当前对话后还有足够的数量
+            # 获取对话ID列表（Redis lrange返回最新的在前面，需要反转）
             all_conversation_ids = self.redis_conn.lrange(
-                user_conversations_key, 0, max_fetch - 1
+                user_conversations_key, 0, limit - 1
             )
+            # 反转列表，让最新的对话在最后
+            all_conversation_ids = list(reversed(all_conversation_ids))
             
-            # 排除当前对话ID，并限制返回数量
+            # 处理对话ID
             filtered_ids = []
             for conv_id in all_conversation_ids:
                 # 处理可能的字节或字符串类型
@@ -354,13 +359,13 @@ class RedisManager:
                     else:
                         conv_id_str = str(conv_id)
                     
+                    # 检查是否属于当前对话（通过conversation_id前缀匹配）
+                    # 只排除完全匹配当前conversation_id的记录，不包括带时间戳的unique_id
                     if conv_id_str != conversation_id:
                         filtered_ids.append(conv_id_str)
                 except Exception as e:
                     logger.warning(f"Failed to process conversation ID: {conv_id}, error: {e}")
                     continue
-            
-            filtered_ids = filtered_ids[:limit]
             
             for conv_id in filtered_ids:
                 conversation_key = f"conversation:{user_id}:{conv_id}"

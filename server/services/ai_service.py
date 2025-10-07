@@ -136,10 +136,23 @@ class AIService:
     
     def build_messages(self, user_message: str, system_prompt: str) -> List[Dict[str, str]]:
         """构建消息列表"""
-        return [
+        messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ]
+        
+        # 打印完整的对话消息（只打印一次，包含当前用户消息）
+        app_logger.info("=" * 100)
+        app_logger.info("🤖 [AI-SERVICE] 最终喂给大语言模型的完整Prompt:")
+        app_logger.info("=" * 100)
+        app_logger.info("📄 [AI-SERVICE] System Message (系统提示词):")
+        app_logger.info(f"{system_prompt}")
+        app_logger.info("=" * 50)
+        app_logger.info("📄 [AI-SERVICE] User Message (当前用户消息):")
+        app_logger.info(f"{user_message}")
+        app_logger.info("=" * 100)
+        
+        return messages
     
     async def call_api(self, messages: List[Dict[str, str]]) -> str:
         """调用通义千问API"""

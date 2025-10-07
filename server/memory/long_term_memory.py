@@ -66,13 +66,13 @@ class LongTermMemory:
                 }
             )
             
-            # 2. 判断是否应该存储
+            # 2. 提取用户画像信息（独立于重要性评分）
+            await self._extract_user_profile(user_id, message, response)
+            
+            # 3. 判断是否应该存储到语义记忆
             should_store = importance_score >= self.min_importance_score
             
             if should_store:
-                # 3. 提取用户画像信息
-                await self._extract_user_profile(user_id, message, response)
-                
                 # 4. 存储到语义记忆
                 memory_id = await self._store_semantic_memory(
                     user_id=user_id,
