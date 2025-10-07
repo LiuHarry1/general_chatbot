@@ -113,7 +113,7 @@ class LongTermMemory:
         min_importance: float = 0.0,
         time_range: Optional[Tuple[datetime, datetime]] = None
     ) -> Dict[str, Any]:
-        """搜索相关的长期记忆"""
+        """搜索相关的长期记忆 - 仅进行语义搜索"""
         if not self.enabled:
             return {
                 "memories": [],
@@ -124,7 +124,7 @@ class LongTermMemory:
             }
         
         try:
-            # 1. 语义搜索
+            # 只进行语义搜索
             semantic_results = await self.semantic_search.search_semantic_memories(
                 query=query,
                 user_id=user_id,
@@ -133,23 +133,12 @@ class LongTermMemory:
                 time_range=time_range
             )
             
-            # 2. 按意图搜索
-            intent_results = await self.semantic_search.search_by_intent(
-                intent=query,
-                user_id=user_id,
-                limit=limit // 2
-            )
-            
-            # 3. 合并结果
-            all_memories = semantic_results + intent_results
-            
             return {
-                "memories": all_memories,
+                "memories": semantic_results,
                 "metadata": {
                     "enabled": True,
                     "semantic_count": len(semantic_results),
-                    "intent_count": len(intent_results),
-                    "total_count": len(all_memories),
+                    "total_count": len(semantic_results),
                     "query": query,
                     "limit": limit
                 }

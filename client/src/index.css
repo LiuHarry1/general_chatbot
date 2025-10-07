@@ -15,6 +15,19 @@
   html {
     @apply bg-gray-50;
   }
+  
+  /* 确保长文本和URL能够正确换行 */
+  p, span, div {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  
+  /* 特别处理链接 */
+  a {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
 }
 
 @layer components {

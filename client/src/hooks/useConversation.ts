@@ -242,7 +242,9 @@ export const useConversation = (userId?: string) => {
 
   return {
     conversations,
+    setConversations,
     currentConversationId,
+    setCurrentConversationId,
     messages,
     setMessages,
     isLoading,

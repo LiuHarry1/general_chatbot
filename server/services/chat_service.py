@@ -342,6 +342,7 @@ class ChatService:
                 "type": "message_created",
                 "user_message_id": user_message_id,
                 "ai_message_id": ai_message_id,
+                "conversation_id": conversation_id,
                 "intent": intent,
                 "sources": sources
             }
@@ -408,6 +409,7 @@ class ChatService:
             # 解析请求参数
             user_id, conversation_id, message, attachments = self._parse_request(request)
             app_logger.info(f"处理聊天请求: {user_id}::{conversation_id}")
+            
             
             # 预处理请求
             attachments_data = self.extract_attachments_data(attachments)

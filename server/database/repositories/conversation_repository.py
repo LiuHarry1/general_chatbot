@@ -17,7 +17,13 @@ class ConversationRepository:
     
     def create_conversation(self, title: str, user_id: str = "default_user") -> str:
         """创建新对话"""
-        conversation_id = f"conv_{int(datetime.now().timestamp() * 1000)}"
+        import time
+        import uuid
+        
+        # 使用UUID + 时间戳确保唯一性
+        timestamp = int(time.time() * 1000000)  # 微秒级时间戳
+        uuid_short = str(uuid.uuid4())[:8]  # UUID前8位
+        conversation_id = f"conv_{timestamp}_{uuid_short}"
         
         query = """
             INSERT INTO conversations (id, user_id, title, created_at, updated_at)

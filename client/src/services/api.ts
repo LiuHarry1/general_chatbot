@@ -32,7 +32,7 @@ export const sendMessageStream = async (
   onError: (error: string) => void,
   onEnd: () => void,
   onImage?: (image: { url: string; filename: string }) => void,
-  onMessageCreated?: (data: { user_message_id: string; ai_message_id: string; intent?: string; sources?: string[] }) => void,
+  onMessageCreated?: (data: { user_message_id: string; ai_message_id: string; conversation_id?: string; intent?: string; sources?: string[] }) => void,
   userId?: string
 ): Promise<void> => {
   const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/chat/stream`, {

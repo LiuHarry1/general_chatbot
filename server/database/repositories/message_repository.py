@@ -20,7 +20,14 @@ class MessageRepository:
                       intent: str = None, sources: List[str] = None, 
                       attachments: List[Dict] = None, is_typing: bool = False) -> str:
         """创建新消息"""
-        message_id = f"msg_{int(datetime.now().timestamp() * 1000)}"
+        import time
+        import random
+        import uuid
+        
+        # 使用UUID + 时间戳确保唯一性
+        timestamp = int(time.time() * 1000000)  # 微秒级时间戳
+        uuid_short = str(uuid.uuid4())[:8]  # UUID前8位
+        message_id = f"msg_{timestamp}_{uuid_short}"
         
         # 序列化复杂字段
         sources_json = json.dumps(sources) if sources else None

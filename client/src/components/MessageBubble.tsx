@@ -46,7 +46,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
         {/* 用户消息样式 */}
         {isUser ? (
           <div className="bg-gray-100 text-gray-900 rounded-2xl rounded-br-md px-4 py-3">
-            <p className="whitespace-pre-wrap leading-relaxed text-base">{message.content}</p>
+            <p className="whitespace-pre-wrap break-words leading-relaxed text-base overflow-wrap-anywhere">{message.content}</p>
           </div>
         ) : (
           /* AI消息样式 */
@@ -56,7 +56,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
               {/* 消息内容 */}
               <div className="bg-white rounded-2xl rounded-tl-md">
                 <div className="p-4">
-                  <div className="prose prose-gray max-w-none">
+                  <div className="prose prose-gray max-w-none break-words overflow-wrap-anywhere">
                     {message.content ? (
                       <>
                         <ReactMarkdown
@@ -132,7 +132,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
                             href={source}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 truncate block hover:underline"
+                            className="text-xs text-blue-600 hover:text-blue-800 break-all block hover:underline"
                           >
                             {source}
                           </a>
