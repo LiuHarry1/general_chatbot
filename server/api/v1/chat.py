@@ -25,9 +25,6 @@ async def chat_stream(chat_request: ChatRequest):
             # 使用ChatService处理流式聊天请求
             async for chunk in chat_service.process_stream_request(chat_request):
                 yield chunk
-            
-            # 发送结束信号
-            yield f"data: {json.dumps({'type': 'end'}, ensure_ascii=False)}\n\n"
                 
         except Exception as e:
             app_logger.error(f"流式聊天处理失败: {e}")

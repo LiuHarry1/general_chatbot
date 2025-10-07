@@ -13,7 +13,7 @@ import { useConversation } from './hooks/useConversation';
 import { useAuth } from './hooks/useAuth';
 import { useClickOutside } from './hooks/useClickOutside';
 import { UI_CONSTANTS } from './constants';
-import { truncateText } from './utils/helpers';
+import { truncateText, generateId } from './utils/helpers';
 
 const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -35,6 +35,7 @@ const App: React.FC = () => {
     conversations,
     currentConversationId,
     messages,
+    setMessages,
     isLoading,
     setIsLoading,
     createNewConversation,
@@ -58,121 +59,155 @@ const App: React.FC = () => {
     
     // 注意：不在这里手动设置 isNewConversation，让 useEffect 统一管理
 
-    // 添加用户消息到数据库
-    const userMessage = await addMessage({
+    // 创建临时的用户消息用于显示（不保存到数据库）
+    const tempUserMessage: ChatMessage = {
+      id: generateId(),
+      conversationId: currentConversationId || 'temp',
       role: 'user',
       content,
-      attachments: messageAttachments
-    });
+      created_at: new Date(),
+      attachments: messageAttachments,
+      isTyping: false
+    };
 
-    if (!userMessage) {
-      console.error('添加用户消息失败');
-      return;
-    }
-
-    // 创建AI消息的初始状态
-    const botMessage = await addMessage({
+    // 创建临时的AI消息用于显示（不保存到数据库）
+    const tempBotMessage: ChatMessage = {
+      id: generateId(),
+      conversationId: currentConversationId || 'temp',
       role: 'assistant',
       content: '',
-      intent: undefined,
-      sources: [],
-      isTyping: true  // 标记为正在输入状态
-    });
+      created_at: new Date(),
+      isTyping: true
+    };
 
-    if (!botMessage) {
-      console.error('创建AI消息失败');
-      return;
-    }
+    // 临时添加到本地状态用于显示
+    setMessages(prev => [...prev, tempUserMessage, tempBotMessage]);
 
     // 用于累积流式内容和保存metadata
     let accumulatedContent = '';
     let savedMetadata: { intent?: string; sources?: string[]; searchResults?: any[] } = {};
+    let isStreamEnded = false; // 标记流式响应是否已结束
     
     try {
       await sendMessageStream(
         {
           message: content,
-          conversationId: userMessage.conversationId || currentConversationId || '1',
+          conversationId: currentConversationId || 'temp',
           attachments: messageAttachments
         },
         // onChunk - 处理内容块
         (chunk: string) => {
-          if (botMessage) {
-            accumulatedContent += chunk;
-            updateMessage(botMessage.id, { 
-              content: accumulatedContent,
-              isTyping: true, // 保持loading状态，直到流式输出结束
-              // 保留已保存的metadata
-              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
-              sources: savedMetadata.sources,
-              searchResults: savedMetadata.searchResults
-            }, false); // 不保存到数据库，只更新本地状态
-          }
+          accumulatedContent += chunk;
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { ...msg, content: accumulatedContent, isTyping: !isStreamEnded }
+                : msg
+            )
+          );
         },
         // onMetadata - 处理元数据
         (metadata) => {
-          if (botMessage) {
-            // 保存metadata到本地变量
-            savedMetadata = {
-              intent: metadata.intent,
-              sources: metadata.sources,
-              searchResults: metadata.search_results
-            };
-            updateMessage(botMessage.id, {
-              intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
-              sources: metadata.sources,
-              searchResults: metadata.search_results,
-              isTyping: true // 保持loading状态，直到流式输出结束
-            }, false); // 不保存到数据库，只更新本地状态
-          }
+          savedMetadata = {
+            intent: metadata.intent,
+            sources: metadata.sources,
+            searchResults: metadata.search_results
+          };
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { 
+                    ...msg, 
+                    intent: metadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+                    sources: metadata.sources,
+                    searchResults: metadata.search_results,
+                    isTyping: true
+                  }
+                : msg
+            )
+          );
         },
         // onError - 处理错误
         (error: string) => {
-          if (botMessage) {
-            updateMessage(botMessage.id, { 
-              content: `错误: ${error}`, 
-              isTyping: false,
-              // 使用保存的metadata
-              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
-              sources: savedMetadata.sources,
-              searchResults: savedMetadata.searchResults
-            }, true); // 错误时保存到数据库
-          }
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { 
+                    ...msg, 
+                    content: `错误: ${error}`, 
+                    isTyping: false,
+                    intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+                    sources: savedMetadata.sources,
+                    searchResults: savedMetadata.searchResults
+                  }
+                : msg
+            )
+          );
         },
         // onEnd - 流结束
         () => {
-          if (botMessage) {
-            updateMessage(botMessage.id, { 
-              content: accumulatedContent,
-              isTyping: false,
-              // 使用保存的metadata
-              intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
-              sources: savedMetadata.sources,
-              searchResults: savedMetadata.searchResults
-            }, true); // 结束时保存到数据库
-          }
+          isStreamEnded = true; // 标记流式响应已结束
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { 
+                    ...msg, 
+                    content: accumulatedContent,
+                    isTyping: false,
+                    intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+                    sources: savedMetadata.sources,
+                    searchResults: savedMetadata.searchResults
+                  }
+                : msg
+            )
+          );
         },
         // onImage - 处理图片
         (image: { url: string; filename: string }) => {
-          if (botMessage) {
-            // 确保图片URL是完整的URL，使用API服务器的地址
-            let fullImageUrl;
-            if (image.url.startsWith('http')) {
-              fullImageUrl = image.url;
-            } else {
-              // 使用API服务器的地址而不是前端地址
-              const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-              const apiServerUrl = apiBaseUrl.replace('/api', ''); // 移除/api后缀
-              fullImageUrl = `${apiServerUrl}${image.url}`;
-            }
-            // 将图片添加到消息内容中
-            const imageMarkdown = `\n\n![${image.filename}](${fullImageUrl})`;
-            accumulatedContent += imageMarkdown;
-            updateMessage(botMessage.id, { 
-              content: accumulatedContent,
-              isTyping: true // 继续loading，等待更多内容
-            }, false); // 不保存到数据库，只更新本地状态
+          // 确保图片URL是完整的URL，使用API服务器的地址
+          let fullImageUrl;
+          if (image.url.startsWith('http')) {
+            fullImageUrl = image.url;
+          } else {
+            // 使用API服务器的地址而不是前端地址
+            const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+            const apiServerUrl = apiBaseUrl.replace('/api', ''); // 移除/api后缀
+            fullImageUrl = `${apiServerUrl}${image.url}`;
           }
+          // 将图片添加到消息内容中
+          const imageMarkdown = `\n\n![${image.filename}](${fullImageUrl})`;
+          accumulatedContent += imageMarkdown;
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { 
+                    ...msg, 
+                    content: accumulatedContent,
+                    isTyping: true
+                  }
+                : msg
+            )
+          );
+        },
+        // onMessageCreated - 处理消息创建完成
+        (data) => {
+          // 更新临时消息的ID为服务器返回的真实ID
+          setMessages(prev => 
+            prev.map(msg => {
+              if (msg.id === tempUserMessage.id) {
+                return { ...msg, id: data.user_message_id };
+              } else if (msg.id === tempBotMessage.id) {
+                return { 
+                  ...msg, 
+                  id: data.ai_message_id,
+                  intent: data.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+                  sources: data.sources,
+                  isTyping: false  // 消息创建完成后，强制停止typing状态
+                };
+              }
+              return msg;
+            })
+          );
         },
         // userId - 传递用户ID
         user?.id
@@ -180,26 +215,30 @@ const App: React.FC = () => {
       
       // 更新对话标题（如果是第一条消息）
       // 注意：这里检查的是添加用户消息前的消息数量
-      if (messagesBeforeUserMessage.length === 0 && userMessage?.conversationId) {
+      if (messagesBeforeUserMessage.length === 0 && currentConversationId) {
         const conversationTitle = truncateText(content, UI_CONSTANTS.MAX_TITLE_LENGTH);
         try {
-          await updateConversation(userMessage.conversationId, conversationTitle);
+          await updateConversation(currentConversationId, conversationTitle);
         } catch (error) {
           console.error('更新对话标题失败:', error);
         }
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      if (botMessage) {
-        updateMessage(botMessage.id, { 
-          content: '抱歉，我遇到了一个错误。请稍后重试。', 
-          isTyping: false,
-          // 使用保存的metadata
-          intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
-          sources: savedMetadata.sources,
-          searchResults: savedMetadata.searchResults
-        });
-      }
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === tempBotMessage.id 
+            ? { 
+                ...msg, 
+                content: '抱歉，我遇到了一个错误。请稍后重试。', 
+                isTyping: false,
+                intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
+                sources: savedMetadata.sources,
+                searchResults: savedMetadata.searchResults
+              }
+            : msg
+        )
+      );
     }
   };
 

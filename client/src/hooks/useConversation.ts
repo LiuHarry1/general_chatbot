@@ -244,6 +244,7 @@ export const useConversation = (userId?: string) => {
     conversations,
     currentConversationId,
     messages,
+    setMessages,
     isLoading,
     setIsLoading,
     createNewConversation,
