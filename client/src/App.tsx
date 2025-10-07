@@ -7,7 +7,7 @@ import LoadingScreen from './components/LoadingScreen';
 import Header from './components/Header';
 import NewConversationView from './components/NewConversationView';
 import SearchResultsSidebar from './components/SearchResultsSidebar';
-import { ChatMessage, Conversation, Attachment, User } from './types';
+import { ChatMessage, Attachment, User } from './types';
 import { sendMessageStream } from './services/api';
 import { useConversation } from './hooks/useConversation';
 import { useAuth } from './hooks/useAuth';
@@ -37,12 +37,8 @@ const App: React.FC = () => {
     messages,
     setMessages,
     isLoading,
-    setIsLoading,
-    createNewConversation,
     selectConversation,
     deleteConversation,
-    addMessage,
-    updateMessage,
     updateConversation,
     resetConversation
   } = useConversation(user?.id);

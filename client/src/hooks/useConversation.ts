@@ -169,7 +169,7 @@ export const useConversation = (userId?: string) => {
       console.error('添加消息失败:', error);
       throw error; // 直接抛出错误，让调用者处理
     }
-  }, [currentConversationId, userId]);
+  }, [userId]);
 
   // 更新消息
   const updateMessage = useCallback(async (messageId: string, updates: Partial<ChatMessage>, saveToDatabase: boolean = true) => {

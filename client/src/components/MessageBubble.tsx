@@ -19,10 +19,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
   // 直接计算是否应该显示搜索按钮，不使用状态管理
   const shouldShowSearchButton = !isUser && message.sources && message.sources.length > 0;
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);

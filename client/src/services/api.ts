@@ -1,4 +1,4 @@
-import { SendMessageRequest, ApiResponse, Conversation, ChatMessage } from '../types';
+import { SendMessageRequest } from '../types';
 import { API_CONSTANTS } from '../constants';
 
 // API响应的原始数据类型（包含字符串日期）
