@@ -485,12 +485,12 @@ class ChatService:
         # === 阶段1：生成并执行代码（作为工具使用）===
         app_logger.info("🔧 [阶段1] 生成代码")
         
-        # 发送处理提示
-        processing_data = {
-            "type": "content",
-            "content": "🔍 正在处理您的请求...\n\n"
+        # 发送临时状态提示（不会保存到数据库）
+        status_data = {
+            "type": "status",
+            "content": "🔍 正在分析并生成结果..."
         }
-        yield f"data: {json.dumps(processing_data, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps(status_data, ensure_ascii=False)}\n\n"
         
         # 生成代码
         code_response = await self.ai_service.generate_response(

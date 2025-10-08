@@ -17,6 +17,7 @@ export interface ChatMessage {
   sources?: string[];
   searchResults?: SearchResult[];
   isTyping?: boolean;
+  tempStatus?: string;  // 临时状态消息（不保存到数据库）
 }
 
 export interface Attachment {

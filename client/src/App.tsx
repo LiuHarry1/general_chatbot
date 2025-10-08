@@ -174,6 +174,7 @@ const App: React.FC = () => {
                     ...msg, 
                     content: accumulatedContent,
                     isTyping: false,
+                    tempStatus: undefined,  // 清除临时状态
                     intent: savedMetadata.intent as 'normal' | 'web' | 'file' | 'search' | 'code' | undefined,
                     sources: savedMetadata.sources,
                     searchResults: savedMetadata.searchResults
@@ -238,6 +239,16 @@ const App: React.FC = () => {
               console.error('更新对话标题失败:', error);
             }
           }
+        },
+        // onStatus - 处理临时状态
+        (status: string) => {
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === tempBotMessage.id 
+                ? { ...msg, tempStatus: status }
+                : msg
+            )
+          );
         },
         // userId - 传递用户ID
         user?.id

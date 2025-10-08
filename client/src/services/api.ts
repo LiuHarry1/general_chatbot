@@ -33,6 +33,7 @@ export const sendMessageStream = async (
   onEnd: () => void,
   onImage?: (image: { url: string; filename: string }) => void,
   onMessageCreated?: (data: { user_message_id: string; ai_message_id: string; conversation_id?: string; intent?: string; sources?: string[] }) => void,
+  onStatus?: (status: string) => void,
   userId?: string
 ): Promise<void> => {
   const response = await fetch(`${API_CONSTANTS.BASE_URL}/v1/chat/stream`, {
@@ -73,6 +74,12 @@ export const sendMessageStream = async (
             const data = JSON.parse(line.slice(6));
             
             switch (data.type) {
+              case 'status':
+                // 临时状态消息（不累积到内容中）
+                if (onStatus) {
+                  onStatus(data.content);
+                }
+                break;
               case 'metadata':
                 onMetadata({
                   intent: data.intent,
@@ -82,6 +89,10 @@ export const sendMessageStream = async (
                 });
                 break;
               case 'content':
+                // 正式内容到来时，清除临时状态
+                if (onStatus) {
+                  onStatus("");
+                }
                 onChunk(data.content);
                 break;
               case 'image':

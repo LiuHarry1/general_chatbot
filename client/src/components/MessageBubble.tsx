@@ -57,7 +57,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
               <div className="bg-white rounded-2xl rounded-tl-md">
                 <div className="p-4">
                   <div className="prose prose-gray max-w-none break-words overflow-wrap-anywhere">
-                    {message.content ? (
+                    {/* 临时状态显示（优先显示，有状态时不显示其他内容） */}
+                    {message.tempStatus ? (
+                      <div className="flex items-center gap-2 text-gray-600 animate-pulse">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                        <span className="text-sm">{message.tempStatus}</span>
+                      </div>
+                    ) : message.content ? (
+                      /* 正式内容 */
                       <>
                         <ReactMarkdown
                           components={{
@@ -93,18 +104,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onShowSearchResu
                           </div>
                         )}
                       </>
+                    ) : message.isTyping ? (
+                      /* 无内容时的 typing 指示器 */
+                      <div className="inline-flex items-center">
+                        <span className="inline-typing-indicator">
+                          <span className="typing-dot" style={{ animationDelay: '0ms' }}></span>
+                          <span className="typing-dot" style={{ animationDelay: '150ms' }}></span>
+                          <span className="typing-dot" style={{ animationDelay: '300ms' }}></span>
+                        </span>
+                      </div>
                     ) : (
-                      message.isTyping ? (
-                        <div className="inline-flex items-center">
-                          <span className="inline-typing-indicator">
-                            <span className="typing-dot" style={{ animationDelay: '0ms' }}></span>
-                            <span className="typing-dot" style={{ animationDelay: '150ms' }}></span>
-                            <span className="typing-dot" style={{ animationDelay: '300ms' }}></span>
-                          </span>
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 italic">消息内容为空</p>
-                      )
+                      <p className="text-gray-500 italic">消息内容为空</p>
                     )}
                   </div>
                   
