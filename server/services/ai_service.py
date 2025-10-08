@@ -1,27 +1,21 @@
 """
-AI服务
-负责与通义千问API的交互
+AI服务（重构版）
+负责构建提示词和协调模型调用，模型调用逻辑已统一到model_client
 """
 import json
-import httpx
-import asyncio
 from typing import List, Dict, Any, Optional, AsyncGenerator
-from fastapi import HTTPException
 
 from utils.logger import app_logger
 from config import settings
+from services.model_client import qwen_client
 
 
 class AIService:
-    """AI服务"""
+    """AI服务 - 重构版，只负责业务逻辑，模型调用委托给model_client"""
     
     def __init__(self):
-        self.api_key = settings.dashscope_api_key
-        self.base_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-        self.model = settings.qwen_model
-        self.timeout = 60.0
-        
-        app_logger.info(f"AI服务初始化 - API密钥: {repr(self.api_key[:20])}..., 模型: {self.model}")
+        self.model_client = qwen_client
+        app_logger.info(f"AI服务初始化（重构版） - 使用统一大语言模型客户端")
     
     def build_system_prompt(self, intent: str, file_content: Optional[str] = None, 
                           web_content: Optional[str] = None, search_results: Optional[Dict] = None,
@@ -133,78 +127,25 @@ class AIService:
         
         return messages
     
-    async def call_api(self, messages: List[Dict[str, str]]) -> str:
-        """调用通义千问API"""
-        try:
-            app_logger.info("开始调用通义千问API")
-            
-            request_data = {
-                "model": self.model,
-                "input": {
-                    "messages": messages
-                },
-                "parameters": {
-                    "temperature": settings.qwen_temperature,
-                    "max_tokens": settings.qwen_max_tokens,
-                    "top_p": settings.qwen_top_p,
-                    "repetition_penalty": settings.qwen_repetition_penalty
-                }
-            }
-            
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    self.base_url,
-                    json=request_data,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    }
-                )
-                response.raise_for_status()
-                
-                result = response.json()
-            
-            # 提取AI响应
-            if "output" in result and "text" in result["output"]:
-                ai_response = result["output"]["text"]
-                app_logger.info(f"通义千问API调用成功，响应长度: {len(ai_response)}")
-                return ai_response
-            else:
-                app_logger.error(f"API响应格式异常: {result}")
-                raise HTTPException(status_code=500, detail="AI服务响应格式异常")
-        
-        except httpx.TimeoutException:
-            app_logger.error("通义千问API调用超时")
-            raise HTTPException(status_code=408, detail="AI服务响应超时，请稍后重试")
-        
-        except httpx.HTTPStatusError as e:
-            app_logger.error(f"通义千问API请求失败: {e.response.status_code}, {e.response.text}")
-            if e.response.status_code == 401:
-                raise HTTPException(status_code=500, detail="AI服务认证失败")
-            elif e.response.status_code == 429:
-                raise HTTPException(status_code=429, detail="AI服务请求过于频繁，请稍后重试")
-            elif e.response.status_code == 400:
-                # 检查是否是内容审核失败
-                try:
-                    error_data = e.response.json()
-                    if error_data.get("code") == "DataInspectionFailed":
-                        raise HTTPException(status_code=400, detail="内容审核未通过，请尝试使用不同的表达方式")
-                except:
-                    pass
-                raise HTTPException(status_code=400, detail="请求内容不符合规范，请重新表述您的问题")
-            else:
-                raise HTTPException(status_code=500, detail="AI服务暂时不可用")
-        
-        except Exception as e:
-            app_logger.error(f"通义千问API调用失败: {e}")
-            raise HTTPException(status_code=500, detail=f"AI服务调用失败: {str(e)}")
-    
     async def generate_response(self, user_message: str, intent: str = "normal", 
                               file_content: Optional[str] = None, 
                               web_content: Optional[str] = None, 
                               search_results: Optional[Dict] = None,
                               full_context: Optional[str] = None) -> str:
-        """生成AI响应"""
+        """
+        生成AI响应
+        
+        Args:
+            user_message: 用户消息
+            intent: 意图类型
+            file_content: 文件内容
+            web_content: 网页内容
+            search_results: 搜索结果
+            full_context: 完整上下文（包含记忆）
+            
+        Returns:
+            AI响应文本
+        """
         try:
             app_logger.info(f"开始生成AI响应，意图: {intent}")
             
@@ -214,17 +155,15 @@ class AIService:
             # 构建消息列表
             messages = self.build_messages(user_message, system_prompt)
             
-            # 调用API
-            response = await self.call_api(messages)
+            # 调用模型客户端
+            response = await self.model_client.generate_text(messages)
             
-            app_logger.info(f"AI响应生成完成， 响应长度: {len(response)}")
+            app_logger.info(f"AI响应生成完成，响应长度: {len(response)}")
             return response
         
-        except HTTPException:
-            raise
         except Exception as e:
             app_logger.error(f"AI响应生成失败: {e}")
-            raise HTTPException(status_code=500, detail=f"AI响应生成失败: {str(e)}")
+            raise
     
     async def generate_stream_response(
         self,
@@ -235,7 +174,20 @@ class AIService:
         search_results: Optional[Dict[str, Any]] = None,
         full_context: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
-        """生成流式AI响应"""
+        """
+        生成流式AI响应
+        
+        Args:
+            user_message: 用户消息
+            intent: 意图类型
+            file_content: 文件内容
+            web_content: 网页内容
+            search_results: 搜索结果
+            full_context: 完整上下文
+            
+        Yields:
+            文本片段
+        """
         try:
             app_logger.info(f"开始生成流式AI响应，意图: {intent}")
             
@@ -245,18 +197,11 @@ class AIService:
             # 构建消息列表
             messages = self.build_messages(user_message, system_prompt)
             
-            # 获取完整响应
-            full_response = await self.call_api(messages)
-            
-            # 将响应分块发送，模拟流式效果
-            chunk_size = 3  # 每次发送3个字符
-            for i in range(0, len(full_response), chunk_size):
-                chunk = full_response[i:i + chunk_size]
+            # 使用模型客户端的流式生成
+            async for chunk in self.model_client.generate_text_stream(messages):
                 yield chunk
-                # 添加小延迟模拟真实流式效果
-                await asyncio.sleep(0.05)
             
-            app_logger.info(f"流式AI响应生成完成，意图: {intent}, 响应长度: {len(full_response)}")
+            app_logger.info(f"流式AI响应生成完成，意图: {intent}")
         
         except Exception as e:
             app_logger.error(f"流式AI响应生成失败: {e}")
@@ -265,4 +210,3 @@ class AIService:
 
 # 全局AI服务实例
 ai_service = AIService()
-

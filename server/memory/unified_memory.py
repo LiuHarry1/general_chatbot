@@ -10,6 +10,7 @@ import logging
 from utils.logger import app_logger, log_execution_time
 from memory.short_term_memory import short_term_memory
 from memory.long_term_memory import long_term_memory
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +20,16 @@ class UnifiedMemoryManager:
     
     def __init__(
         self,
-        short_term_enabled: bool = True,
-        long_term_enabled: bool = True
+        short_term_enabled: bool = None,
+        long_term_enabled: bool = None
     ):
         self.short_term_memory = short_term_memory
         self.long_term_memory = long_term_memory
         
-        # 设置启用状态
+        # 设置启用状态 - 从配置文件读取，如果未提供则使用配置文件的值
+        short_term_enabled = short_term_enabled if short_term_enabled is not None else settings.short_term_memory_enabled
+        long_term_enabled = long_term_enabled if long_term_enabled is not None else settings.long_term_memory_enabled
+        
         self.short_term_memory.enabled = short_term_enabled
         self.long_term_memory.set_enabled(long_term_enabled)
         
@@ -413,8 +417,5 @@ class UnifiedMemoryManager:
             self.long_term_memory.update_config(**kwargs)
 
 
-# 全局实例 - 默认都启用
-unified_memory_manager = UnifiedMemoryManager(
-    short_term_enabled=True,
-    long_term_enabled=True
-)
+# 全局实例 - 从配置文件读取启用状态
+unified_memory_manager = UnifiedMemoryManager()

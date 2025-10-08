@@ -11,6 +11,7 @@ import logging
 from utils.logger import app_logger
 from services.ai_service import ai_service
 from memory.redis_manager import redis_manager
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,14 @@ logger = logging.getLogger(__name__)
 class ProfileService:
     """User profile service"""
     
-    def __init__(self):
+    def __init__(self, enabled: bool = None, min_confidence: float = None, max_preferences: int = None, max_interests: int = None, expiry_days: int = None):
+        # 从配置文件读取启用状态和配置
+        self.enabled = enabled if enabled is not None else settings.user_profile_enabled
+        self.min_confidence = min_confidence if min_confidence is not None else settings.profile_min_confidence
+        self.max_preferences = max_preferences if max_preferences is not None else settings.profile_max_preferences
+        self.max_interests = max_interests if max_interests is not None else settings.profile_max_interests
+        self.expiry_days = expiry_days if expiry_days is not None else settings.profile_expiry_days
+        
         # 偏好提取关键词
         self.preference_keywords = [
             "我喜欢", "我不喜欢", "我讨厌", "我爱", "我恨",
@@ -53,7 +61,7 @@ class ProfileService:
             "detailed": ["详细", "具体", "仔细", "全面"]
         }
         
-        app_logger.info("ProfileService initialized")
+        app_logger.info(f"ProfileService initialized - enabled: {self.enabled}, min_confidence: {self.min_confidence}, max_preferences: {self.max_preferences}, max_interests: {self.max_interests}, expiry_days: {self.expiry_days}")
     
     async def extract_user_preferences(
         self,
@@ -72,6 +80,10 @@ class ProfileService:
         Returns:
             提取到的用户信息
         """
+        # 如果用户画像功能未启用，直接返回
+        if not self.enabled:
+            return {}
+        
         try:
             # 检测是否包含偏好信号
             has_signal = any(keyword in message for keyword in self.preference_keywords)
@@ -83,6 +95,12 @@ class ProfileService:
             extracted_info = await self._extract_with_ai(message, conversation_context)
             
             if extracted_info:
+                # 检查置信度阈值
+                confidence = extracted_info.get("confidence", 1.0)
+                if confidence < self.min_confidence:
+                    app_logger.info(f"置信度过低，不保存用户画像: {user_id} - confidence: {confidence}")
+                    return {}
+                
                 # 更新用户画像
                 await self._update_user_profile(user_id, extracted_info)
                 app_logger.info(f"提取到用户信息: {user_id} - {extracted_info}")
@@ -177,20 +195,26 @@ class ProfileService:
                 existing_identity.update(new_data["identity"])
                 existing_profile["identity"] = existing_identity
             
-            # 合并偏好
+            # 合并偏好（限制最大数量）
             if "preferences" in new_data and isinstance(new_data["preferences"], list):
                 existing_preferences = existing_profile.get("preferences", [])
                 for pref in new_data["preferences"]:
                     if pref not in existing_preferences:
                         existing_preferences.append(pref)
+                # 限制最大数量
+                if len(existing_preferences) > self.max_preferences:
+                    existing_preferences = existing_preferences[-self.max_preferences:]
                 existing_profile["preferences"] = existing_preferences
             
-            # 合并兴趣
+            # 合并兴趣（限制最大数量）
             if "interests" in new_data and isinstance(new_data["interests"], list):
                 existing_interests = existing_profile.get("interests", [])
                 for interest in new_data["interests"]:
                     if interest not in existing_interests:
                         existing_interests.append(interest)
+                # 限制最大数量
+                if len(existing_interests) > self.max_interests:
+                    existing_interests = existing_interests[-self.max_interests:]
                 existing_profile["interests"] = existing_interests
             
             # 更新沟通风格
@@ -204,8 +228,12 @@ class ProfileService:
             # 添加提取时间
             existing_profile["last_extracted"] = datetime.now().isoformat()
             
-            # 保存更新后的画像
-            await redis_manager.set_user_profile(user_id, existing_profile)
+            # 添加过期时间
+            expiry_date = datetime.now() + timedelta(days=self.expiry_days)
+            existing_profile["expires_at"] = expiry_date.isoformat()
+            
+            # 保存更新后的画像（使用过期时间）
+            await redis_manager.set_user_profile(user_id, existing_profile, expiry_seconds=self.expiry_days * 24 * 60 * 60)
             
             app_logger.info(f"用户画像已更新: {user_id}")
             
@@ -214,8 +242,19 @@ class ProfileService:
     
     async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
         """获取用户完整画像"""
+        if not self.enabled:
+            return {}
+        
         try:
             profile = await redis_manager.get_user_profile(user_id)
+            
+            # 检查是否过期
+            if profile and "expires_at" in profile:
+                expiry_date = datetime.fromisoformat(profile["expires_at"])
+                if datetime.now() > expiry_date:
+                    app_logger.info(f"用户画像已过期: {user_id}")
+                    return {}
+            
             return profile
         except Exception as e:
             app_logger.error(f"获取用户画像失败: {e}")
@@ -358,6 +397,6 @@ class ProfileService:
             return "未知"
 
 
-# 全局实例
+# 全局实例 - 从配置文件读取启用状态
 profile_service = ProfileService()
 

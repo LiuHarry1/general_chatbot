@@ -13,6 +13,7 @@ from memory.profile_service import profile_service
 from memory.semantic_search import semantic_search_service
 from memory.importance_calculator import importance_calculator
 from memory.embedding import EmbeddingService
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,20 +21,21 @@ logger = logging.getLogger(__name__)
 class LongTermMemory:
     """长期记忆管理器"""
     
-    def __init__(self, enabled: bool = True):
-        self.enabled = enabled
+    def __init__(self, enabled: bool = None, min_importance_score: float = None, max_memories_per_user: int = None, memory_decay_days: int = None):
+        # 从配置文件读取启用状态，如果未提供则使用配置文件的值
+        self.enabled = enabled if enabled is not None else settings.long_term_memory_enabled
         self.qdrant_manager = qdrant_manager
         self.profile_service = profile_service
         self.semantic_search = semantic_search_service
         self.importance_calculator = importance_calculator
         self.embedding_service = EmbeddingService()
         
-        # 长期记忆配置
-        self.min_importance_score = 0.6
-        self.max_memories_per_user = 1000
-        self.memory_decay_days = 30
+        # 长期记忆配置 - 从配置文件读取，如果未提供则使用配置文件的值
+        self.min_importance_score = min_importance_score if min_importance_score is not None else settings.ltm_min_importance_score
+        self.max_memories_per_user = max_memories_per_user if max_memories_per_user is not None else settings.ltm_max_memories_per_user
+        self.memory_decay_days = memory_decay_days if memory_decay_days is not None else settings.ltm_memory_decay_days
         
-        app_logger.info(f"LongTermMemory initialized - enabled: {enabled}")
+        app_logger.info(f"LongTermMemory initialized - enabled: {self.enabled}, min_importance: {self.min_importance_score}, max_memories: {self.max_memories_per_user}, decay_days: {self.memory_decay_days}")
     
     async def process_conversation_for_storage(
         self,
@@ -403,6 +405,6 @@ class LongTermMemory:
         app_logger.info(f"Long-term memory config updated: min_importance={self.min_importance_score}")
 
 
-# 全局实例 - 默认启用
-long_term_memory = LongTermMemory(enabled=True)
+# 全局实例 - 从配置文件读取启用状态
+long_term_memory = LongTermMemory()
 

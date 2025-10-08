@@ -37,11 +37,29 @@ class Settings(BaseSettings):
     log_retention: str = os.getenv("LOG_RETENTION", "7 days")
     
     # 通义千问配置
+    qwen_api_url: str = os.getenv("QWEN_API_URL", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation")
     qwen_model: str = os.getenv("QWEN_MODEL", "qwen-turbo")
+    qwen_timeout: float = float(os.getenv("QWEN_TIMEOUT", "60.0"))  # API请求超时时间（秒）
     qwen_temperature: float = float(os.getenv("QWEN_TEMPERATURE", "0.7"))
     qwen_max_tokens: int = int(os.getenv("QWEN_MAX_TOKENS", "3000"))
     qwen_top_p: float = float(os.getenv("QWEN_TOP_P", "0.8"))
     qwen_repetition_penalty: float = float(os.getenv("QWEN_REPETITION_PENALTY", "1.1"))
+    
+    # 记忆系统配置
+    short_term_memory_enabled: bool = os.getenv("SHORT_TERM_MEMORY_ENABLED", "true").lower() == "true"
+    long_term_memory_enabled: bool = os.getenv("LONG_TERM_MEMORY_ENABLED", "true").lower() == "true"
+    
+    # 长期记忆详细配置
+    ltm_min_importance_score: float = float(os.getenv("LTM_MIN_IMPORTANCE_SCORE", "0.6"))
+    ltm_max_memories_per_user: int = int(os.getenv("LTM_MAX_MEMORIES_PER_USER", "1000"))
+    ltm_memory_decay_days: int = int(os.getenv("LTM_MEMORY_DECAY_DAYS", "30"))
+    
+    # 用户画像配置
+    user_profile_enabled: bool = os.getenv("USER_PROFILE_ENABLED", "true").lower() == "true"
+    profile_min_confidence: float = float(os.getenv("PROFILE_MIN_CONFIDENCE", "0.6"))  # 最低置信度阈值
+    profile_expiry_days: int = int(os.getenv("PROFILE_EXPIRY_DAYS", "90"))  # 画像数据过期天数
+    profile_max_preferences: int = int(os.getenv("PROFILE_MAX_PREFERENCES", "50"))  # 最大偏好数量
+    profile_max_interests: int = int(os.getenv("PROFILE_MAX_INTERESTS", "30"))  # 最大兴趣数量
     
     class Config:
         env_file = "../.env"
