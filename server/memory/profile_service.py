@@ -150,9 +150,7 @@ class ProfileService:
                 file_content=None,
                 web_content=None,
                 search_results=None,
-                user_identity={},
-                contextual_prompt="",
-                short_term_context=""
+                full_context=""  # 用户信息提取不需要历史记忆
             )
             
             # 解析JSON响应

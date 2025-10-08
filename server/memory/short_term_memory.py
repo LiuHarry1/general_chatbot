@@ -10,7 +10,7 @@ from collections import deque
 import threading
 import uuid
 
-from utils.logger import app_logger
+from utils.logger import app_logger, log_execution_time
 from memory.redis_manager import redis_manager
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ class ShortTermMemory:
             asyncio.create_task(self._compression_processor())
             app_logger.info("Compression processor started")
     
+    @log_execution_time(log_args=True)
     async def get_recent_context(
         self,
         user_id: str,
@@ -75,7 +76,8 @@ class ShortTermMemory:
             app_logger.info(f"🔍 [SHORT-TERM] Getting context for {user_id}:{conversation_id} (limit={limit})")
             
             # 1. 优先从Redis获取短期记忆
-            redis_context = await self._get_from_redis(user_id, conversation_id)
+            redis_context = await self._get_from_redis(user_id, conversation_id, limit)
+            conversations = await self.redis_manager.get_recent_conversations(user_id, conversation_id, limit)
             
             if redis_context:
                 # Redis中有数据，直接返回
@@ -86,7 +88,8 @@ class ShortTermMemory:
                     "metadata": {
                         "enabled": True,
                         "source": "redis",
-                        "limit": limit
+                        "limit": limit,
+                        "conversations": conversations  # 包含原始对话数据用于意图识别
                     }
                 }
             
@@ -108,7 +111,8 @@ class ShortTermMemory:
                         "enabled": True,
                         "source": "database",
                         "recent_turns": 0,
-                        "limit": limit
+                        "limit": limit,
+                        "conversations": []  # 空列表用于意图识别
                     }
                 }
             
@@ -122,7 +126,8 @@ class ShortTermMemory:
                 await self._compress_and_store(user_id, conversation_id, recent_messages)
                 
                 # 重新从Redis获取压缩后的数据
-                redis_context = await self._get_from_redis(user_id, conversation_id)
+                redis_context = await self._get_from_redis(user_id, conversation_id, limit)
+                conversations = await self.redis_manager.get_recent_conversations(user_id, conversation_id, limit)
                 app_logger.info(f"📄 [SHORT-TERM] Compressed context: {redis_context[:200]}...")
                 return {
                     "context": redis_context or "",
@@ -131,7 +136,8 @@ class ShortTermMemory:
                         "source": "redis_compressed",
                         "recent_turns": len(recent_messages),
                         "compressed": True,
-                        "limit": limit
+                        "limit": limit,
+                        "conversations": conversations  # 包含原始对话数据用于意图识别
                     }
                 }
             else:
@@ -149,11 +155,13 @@ class ShortTermMemory:
                 
                 # 格式化并返回
                 context = self._format_recent_messages(recent_messages)
+                conversations = await self.redis_manager.get_recent_conversations(user_id, conversation_id, limit)
                 app_logger.info(f"📄 [SHORT-TERM] Formatted context: {context[:200]}...")
                 return {
                     "context": context,
                     "metadata": {
                         "enabled": True,
+                        "conversations": conversations,  # 包含原始对话数据用于意图识别
                         "source": "database_to_redis",
                         "recent_turns": len(recent_messages),
                         "compressed": False,
@@ -485,7 +493,11 @@ class ShortTermMemory:
 
 摘要："""
             
-            summary = await ai_service.generate_response(summary_prompt)
+            summary = await ai_service.generate_response(
+                user_message=summary_prompt,
+                intent="normal",
+                full_context=""
+            )
             
             if summary and len(summary.strip()) > 10:
                 return await self.store_conversation_summary(user_id, conversation_id, summary.strip())
@@ -587,14 +599,18 @@ class ShortTermMemory:
 
 摘要："""
             
-            summary = await ai_service.generate_response(summary_prompt)
+            summary = await ai_service.generate_response(
+                user_message=summary_prompt,
+                intent="normal",
+                full_context=""
+            )
             return summary.strip() if summary else ""
             
         except Exception as e:
             app_logger.error(f"Failed to generate summary for messages: {e}")
             return ""
     
-    async def _get_from_redis(self, user_id: str, conversation_id: str) -> str:
+    async def _get_from_redis(self, user_id: str, conversation_id: str, limit: int = 10) -> str:
         """从Redis获取短期记忆上下文（支持分层摘要）"""
         try:
             app_logger.info(f"🔍 [SHORT-TERM] Getting context from Redis for {user_id}:{conversation_id}")
@@ -603,7 +619,7 @@ class ShortTermMemory:
             conversations = await self.redis_manager.get_recent_conversations(
                 user_id=user_id,
                 conversation_id=conversation_id,
-                limit=10
+                limit=limit
             )
             app_logger.info(f"📊 [SHORT-TERM] Retrieved {len(conversations)} conversations from Redis")
             
@@ -940,7 +956,11 @@ class ShortTermMemory:
             
             # 使用AI生成摘要
             from services.ai_service import ai_service
-            summary = await ai_service.generate_response(summary_prompt)
+            summary = await ai_service.generate_response(
+                user_message=summary_prompt,
+                intent="normal",
+                full_context=""
+            )
             
             return summary.strip() if summary else None
             

@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 
-from utils.logger import app_logger
+from utils.logger import app_logger, log_execution_time
 from memory.qdrant_manager import qdrant_manager
 from memory.profile_service import profile_service
 from memory.semantic_search import semantic_search_service
@@ -105,6 +105,7 @@ class LongTermMemory:
                 "error": str(e)
             }
     
+    @log_execution_time(log_args=True)
     async def search_relevant_memories(
         self,
         user_id: str,
@@ -154,6 +155,7 @@ class LongTermMemory:
                 }
             }
     
+    @log_execution_time(log_args=True)
     async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
         """获取用户画像"""
         if not self.enabled:

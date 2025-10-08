@@ -25,35 +25,14 @@ class AIService:
     
     def build_system_prompt(self, intent: str, file_content: Optional[str] = None, 
                           web_content: Optional[str] = None, search_results: Optional[Dict] = None,
-                          user_identity: Optional[Dict[str, Any]] = None,
-                          contextual_prompt: Optional[str] = None,
-                          short_term_context: Optional[str] = None) -> str:
+                          full_context: Optional[str] = None) -> str:
         """构建系统提示词"""
         
         base_prompt = "你是一个专业的AI助手，可以帮助用户进行对话、分析文档、搜索网络信息等任务。请用中文回答用户的问题，回答要准确、有用、友好。请确保回答内容积极正面，符合社会价值观。"
         
-        # 添加用户身份信息到系统提示词
-        if user_identity:
-            identity_context = "\n\n用户身份信息："
-            if user_identity.get('name'):
-                identity_context += f"\n- 姓名：{user_identity['name']}"
-            if user_identity.get('age'):
-                identity_context += f"\n- 年龄：{user_identity['age']}岁"
-            if user_identity.get('location'):
-                identity_context += f"\n- 居住地：{user_identity['location']}"
-            if user_identity.get('job'):
-                identity_context += f"\n- 职业：{user_identity['job']}"
-            
-            identity_context += "\n\n请记住这些用户信息，在对话中自然地使用这些信息，让用户感受到你认识他们。"
-            base_prompt += identity_context
-        
-        # 添加上下文提示词（Mem0智能记忆）
-        if contextual_prompt:
-            base_prompt += contextual_prompt
-        
-        # 添加短期记忆上下文
-        if short_term_context:
-            base_prompt += short_term_context
+        # 添加完整上下文（包含所有记忆信息）
+        if full_context:
+            base_prompt += "\n\n" + full_context
         
         if intent == "file":
             system_prompt = (
@@ -224,15 +203,13 @@ class AIService:
                               file_content: Optional[str] = None, 
                               web_content: Optional[str] = None, 
                               search_results: Optional[Dict] = None,
-                              user_identity: Optional[Dict[str, Any]] = None,
-                              contextual_prompt: Optional[str] = None,
-                              short_term_context: Optional[str] = None) -> str:
+                              full_context: Optional[str] = None) -> str:
         """生成AI响应"""
         try:
             app_logger.info(f"开始生成AI响应，意图: {intent}")
             
             # 构建系统提示词
-            system_prompt = self.build_system_prompt(intent, file_content, web_content, search_results, user_identity, contextual_prompt, short_term_context)
+            system_prompt = self.build_system_prompt(intent, file_content, web_content, search_results, full_context)
             
             # 构建消息列表
             messages = self.build_messages(user_message, system_prompt)
@@ -240,7 +217,7 @@ class AIService:
             # 调用API
             response = await self.call_api(messages)
             
-            app_logger.info(f"AI响应生成完成，意图: {intent}, 响应长度: {len(response)}")
+            app_logger.info(f"AI响应生成完成， 响应长度: {len(response)}")
             return response
         
         except HTTPException:
@@ -256,16 +233,14 @@ class AIService:
         file_content: Optional[str] = None,
         web_content: Optional[str] = None,
         search_results: Optional[Dict[str, Any]] = None,
-        user_identity: Optional[Dict[str, Any]] = None,
-        contextual_prompt: Optional[str] = None,
-        short_term_context: Optional[str] = None
+        full_context: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """生成流式AI响应"""
         try:
             app_logger.info(f"开始生成流式AI响应，意图: {intent}")
             
             # 构建系统提示词
-            system_prompt = self.build_system_prompt(intent, file_content, web_content, search_results, user_identity, contextual_prompt, short_term_context)
+            system_prompt = self.build_system_prompt(intent, file_content, web_content, search_results, full_context)
             
             # 构建消息列表
             messages = self.build_messages(user_message, system_prompt)

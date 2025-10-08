@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional, AsyncGenerator, Tuple
 
-from utils.logger import app_logger
+from utils.logger import app_logger, log_execution_time
 from services.ai_service import ai_service
 from services.intent_service import llm_based_intent_service, IntentType
 from services.code_executor import code_execution_service
@@ -54,21 +54,17 @@ class ChatService:
         
         return attachments_data
     
+    @log_execution_time(log_args=True)
     async def extract_user_context(
         self, 
         user_id: str, 
         conversation_id: str, 
         message: str
-    ) -> Tuple[Dict[str, Any], str, str, List[Dict[str, Any]]]:
+    ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         提取用户上下文信息
-        返回: (user_profile, contextual_prompt, short_term_context, recent_conversations)
+        返回: (full_context, recent_conversations)
         """
-        user_profile = {}
-        contextual_prompt = ""
-        short_term_context = ""
-        recent_conversations = []
-        
         try:
             # 使用统一记忆管理器获取完整上下文
             context_result = await self.memory_manager.get_conversation_context(
@@ -78,41 +74,23 @@ class ChatService:
                 limit=3
             )
             
-            # 获取短期记忆上下文
-            short_term_context_data = context_result.get("short_term_context", "")
-            if short_term_context_data:
-                short_term_context = short_term_context_data
+            # 提取完整上下文
+            full_context = context_result.get("full_context", "")
             
-            # 获取长期记忆上下文
-            long_term_context_data = context_result.get("long_term_context", "")
-            if long_term_context_data:
-                contextual_prompt = long_term_context_data
-            
-            # 获取用户画像
-            user_profile_data = context_result.get("user_profile", {})
-            if user_profile_data:
-                user_profile = user_profile_data
-            
-            # 记录上下文信息
+            # 从短期记忆的 metadata 中提取对话历史
+            recent_conversations = []
             metadata = context_result.get("metadata", {})
-            short_term_meta = metadata.get("short_term_metadata", {})
+            short_term_metadata = metadata.get("short_term_metadata", {})
+            if short_term_metadata:
+                recent_conversations = short_term_metadata.get("conversations", [])
+                app_logger.info(f"✅ 从短期记忆中提取到 {len(recent_conversations)} 条对话")
             
-            # 获取当前对话的消息历史用于意图识别
-            try:
-                recent_conversations = conversation_repo.get_current_conversation_messages(
-                    conversation_id=conversation_id,
-                    limit=5
-                )
-                app_logger.info(f"获取到当前对话的 {len(recent_conversations)} 条消息用于意图识别")
-            except Exception as e:
-                app_logger.error(f"获取当前对话消息失败: {e}")
-                # 如果获取失败，使用空列表作为fallback
-                recent_conversations = []
+            return full_context, recent_conversations
                     
         except Exception as e:
             app_logger.error(f"获取对话上下文失败: {e}")
-        
-        return user_profile, contextual_prompt, short_term_context, recent_conversations
+            # 返回空值
+            return "", []
     
     async def generate_stream_response(
         self, 
@@ -121,9 +99,7 @@ class ChatService:
         file_content: Optional[str], 
         web_content: Optional[str], 
         search_results: Optional[List[Dict]], 
-        user_identity: Dict[str, Any], 
-        contextual_prompt: str, 
-        short_term_context: str
+        full_context: str
     ) -> AsyncGenerator[str, None]:
         """生成流式响应"""
         try:
@@ -133,9 +109,7 @@ class ChatService:
                 file_content=file_content,
                 web_content=web_content,
                 search_results=search_results,
-                user_identity=user_identity,
-                contextual_prompt=contextual_prompt,
-                short_term_context=short_term_context
+                full_context=full_context
             ):
                 yield chunk
                 
@@ -176,9 +150,13 @@ class ChatService:
                 app_logger.warning("未能从响应中提取到代码")
                 return
             
+            app_logger.info(f"📝 提取到的代码:\n{code[:200]}...")
+            
             # 执行代码
-            app_logger.info("开始执行代码")
+            app_logger.info("🚀 开始执行代码")
             execution_result = await code_execution_service.execute_code(code, user_id)
+            
+            app_logger.info(f"✅ 执行完成: success={execution_result['success']}, images={len(execution_result['images'])}")
             
             # 发送执行结果
             if execution_result["success"]:
@@ -198,7 +176,9 @@ class ChatService:
                     yield f"data: {json.dumps(output_data, ensure_ascii=False)}\n\n"
                 
                 # 发送图片
-                for image_info in execution_result["images"]:
+                app_logger.info(f"📸 准备发送 {len(execution_result['images'])} 张图片")
+                for i, image_info in enumerate(execution_result["images"]):
+                    app_logger.info(f"📸 图片 {i+1}: {image_info['url']}")
                     image_data = {
                         "type": "image",
                         "url": image_info["url"],
@@ -408,13 +388,13 @@ class ChatService:
         try:
             # 解析请求参数
             user_id, conversation_id, message, attachments = self._parse_request(request)
-            app_logger.info(f"处理聊天请求: {user_id}::{conversation_id}")
-            
+            app_logger.info(f"💬 [{user_id}] {message[:50]}{'...' if len(message) > 50 else ''}")
             
             # 预处理请求
             attachments_data = self.extract_attachments_data(attachments)
-            user_profile, contextual_prompt, short_term_context, recent_conversations = \
-                await self.extract_user_context(user_id, conversation_id, message)
+            full_context, recent_conversations = await self.extract_user_context(
+                user_id, conversation_id, message
+            )
             
             # 意图识别和处理
             intent_result = await self.intent_service.process_intent(
@@ -424,22 +404,24 @@ class ChatService:
                 recent_conversations=recent_conversations
             )
             intent = intent_result.intent.value
-            app_logger.info(f"识别意图: {intent}")
+            app_logger.info(f"🎯 Intent: {intent} | Reason: {intent_result.reasoning}")
             
             # 准备意图相关参数
             intent_params = self._prepare_intent_parameters(intent_result)
             
             # 根据意图类型处理请求
-            if intent == IntentType.CODE:
+            if intent == "code":
+                app_logger.info("🔧 处理代码执行意图")
                 async for chunk in self._handle_code_intent(
                     user_id, conversation_id, message, intent, intent_params, 
-                    user_profile, contextual_prompt, short_term_context, attachments_data
+                    full_context, attachments_data
                 ):
                     yield chunk
             else:
+                app_logger.info(f"💬 处理普通对话意图: {intent}")
                 async for chunk in self._handle_normal_intent(
                     user_id, conversation_id, message, intent, intent_params,
-                    user_profile, contextual_prompt, short_term_context, attachments_data
+                    full_context, attachments_data
                 ):
                     yield chunk
             
@@ -490,31 +472,112 @@ class ChatService:
         message: str, 
         intent: str, 
         intent_params: Dict[str, Any],
-        user_profile: Dict[str, Any], 
-        contextual_prompt: str, 
-        short_term_context: str, 
+        full_context: str, 
         attachments_data: List[Dict[str, Any]]
     ) -> AsyncGenerator[str, None]:
-        """处理代码执行意图"""
-        # 生成代码响应
+        """
+        处理代码执行意图 - 两阶段处理
+        
+        阶段1：生成并执行代码（工具调用）
+        阶段2：基于执行结果回答用户问题
+        """
+        
+        # === 阶段1：生成并执行代码（作为工具使用）===
+        app_logger.info("🔧 [阶段1] 生成代码")
+        
+        # 发送处理提示
+        processing_data = {
+            "type": "content",
+            "content": "🔍 正在处理您的请求...\n\n"
+        }
+        yield f"data: {json.dumps(processing_data, ensure_ascii=False)}\n\n"
+        
+        # 生成代码
         code_response = await self.ai_service.generate_response(
             user_message=message,
             intent=intent,
             file_content=intent_params["file_content"],
             web_content=intent_params["web_content"],
             search_results=intent_params["search_results"],
-            user_identity=user_profile,
-            contextual_prompt=contextual_prompt,
-            short_term_context=short_term_context
+            full_context=full_context
         )
         
-        # 流式发送代码执行结果
-        async for chunk in self.handle_code_execution(user_id, code_response):
-            yield chunk
+        # 提取代码
+        code = self._extract_code_from_response(code_response)
+        if not code:
+            app_logger.warning("未能提取代码")
+            error_data = {"type": "content", "content": "❌ 无法生成分析代码\n"}
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            return
         
-        # 完成流式响应后的处理
+        app_logger.info(f"📝 代码:\n{code[:200]}...")
+        
+        # 执行代码
+        app_logger.info("🚀 [阶段1] 执行代码")
+        execution_result = await code_execution_service.execute_code(code, user_id)
+        
+        if not execution_result["success"]:
+            app_logger.error(f"执行失败: {execution_result['error']}")
+            error_data = {"type": "content", "content": f"❌ 执行失败: {execution_result['error']}\n"}
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            return
+        
+        app_logger.info(f"✅ [阶段1] 执行成功 - 输出: {len(execution_result['output'])}字符, 图片: {len(execution_result['images'])}张")
+        
+        # === 阶段2：基于执行结果回答用户问题 ===
+        app_logger.info("💬 [阶段2] 基于执行结果生成回答")
+        
+        # 构建包含执行结果的提示词
+        result_context = f"""
+用户问题：{message}
+
+代码执行结果：
+"""
+        if execution_result["output"]:
+            result_context += f"- 输出数据：\n{execution_result['output']}\n"
+        
+        if execution_result["images"]:
+            result_context += f"- 生成了 {len(execution_result['images'])} 张图表\n"
+        
+        result_context += """
+请基于以上执行结果，直接回答用户的问题。
+要求：
+1. 用自然语言回答，不要显示代码
+2. 如果有数据输出，解释数据的含义
+3. 如果生成了图表，简要说明图表展示的内容
+4. 回答要简洁、专业、准确
+"""
+        
+        # 流式生成最终回答
+        final_response = ""
+        async for chunk in self.ai_service.generate_stream_response(
+            user_message=result_context,
+            intent="normal",
+            full_context=full_context
+        ):
+            final_response += chunk
+            chunk_data = {"type": "content", "content": chunk}
+            yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+        
+        # 发送图片（如果有）
+        for image_info in execution_result["images"]:
+            app_logger.info(f"📸 发送图片: {image_info['filename']}")
+            image_data = {
+                "type": "image",
+                "url": image_info["url"],
+                "filename": image_info["filename"]
+            }
+            yield f"data: {json.dumps(image_data, ensure_ascii=False)}\n\n"
+            
+            # 将图片 markdown 添加到响应中（用于数据库保存）
+            full_image_url = f"http://localhost:3001{image_info['url']}" if not image_info['url'].startswith('http') else image_info['url']
+            final_response += f"\n\n![{image_info['filename']}]({full_image_url})"
+        
+        app_logger.info(f"📝 [阶段2] 最终响应: {len(final_response)}字符")
+        
+        # 保存到数据库
         async for chunk in self._finalize_stream_response(
-            user_id, conversation_id, message, code_response, intent, 
+            user_id, conversation_id, message, final_response, intent, 
             intent_params["sources"], attachments_data
         ):
             yield chunk
@@ -526,15 +589,10 @@ class ChatService:
         message: str, 
         intent: str, 
         intent_params: Dict[str, Any],
-        user_profile: Dict[str, Any], 
-        contextual_prompt: str, 
-        short_term_context: str, 
+        full_context: str, 
         attachments_data: List[Dict[str, Any]]
     ) -> AsyncGenerator[str, None]:
         """处理普通对话意图"""
-        # 转换用户画像数据格式
-        user_identity = self._format_user_identity(user_profile)
-        
         # 流式生成响应
         full_response = ""
         async for chunk in self.generate_stream_response(
@@ -543,9 +601,7 @@ class ChatService:
             file_content=intent_params["file_content"],
             web_content=intent_params["web_content"],
             search_results=intent_params["search_results"],
-            user_identity=user_identity,
-            contextual_prompt=contextual_prompt,
-            short_term_context=short_term_context
+            full_context=full_context
         ):
             full_response += chunk
             chunk_data = {
@@ -560,19 +616,6 @@ class ChatService:
             intent_params["sources"], attachments_data
         ):
             yield chunk
-    
-    def _format_user_identity(self, user_profile: Dict[str, Any]) -> Dict[str, Any]:
-        """格式化用户身份信息"""
-        if not user_profile or not user_profile.get('identity'):
-            return {}
-        
-        identity_data = user_profile.get('identity', {})
-        return {
-            'name': identity_data.get('name'),
-            'age': identity_data.get('age'),
-            'location': identity_data.get('location'),
-            'job': identity_data.get('job')
-        }
     
     async def _finalize_stream_response(
         self, 

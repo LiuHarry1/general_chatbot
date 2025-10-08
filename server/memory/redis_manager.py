@@ -8,8 +8,6 @@ from typing import Any, Optional, Dict, List
 from datetime import datetime, timedelta
 import logging
 
-from config import settings
-
 logger = logging.getLogger(__name__)
 
 
@@ -294,37 +292,31 @@ class RedisManager:
         response: str,
         metadata: Dict[str, Any] = None
     ) -> bool:
-        """存储单轮对话"""
+        """存储单轮对话到指定 conversation_id"""
         try:
-            # 为每次对话生成唯一ID（使用时间戳）
-            import time
-            unique_id = f"{conversation_id}_{int(time.time() * 1000000)}"
-            conversation_key = f"conversation:{user_id}:{unique_id}"
             timestamp = datetime.now().isoformat()
             
             conversation_data = {
-                "conversation_id": conversation_id,
                 "message": message,
                 "response": response,
                 "timestamp": timestamp,
                 "metadata": json.dumps(metadata or {}, ensure_ascii=False)
             }
             
-            # 存储对话数据
-            self.redis_conn.hset(
-                conversation_key,
-                mapping=conversation_data
-            )
+            # 使用 conversation_id 作为键
+            conversation_key = f"conversation:{user_id}:{conversation_id}"
+            
+            # 将对话数据序列化为 JSON 并添加到列表头部（最新的在前）
+            conversation_json = json.dumps(conversation_data, ensure_ascii=False)
+            self.redis_conn.lpush(conversation_key, conversation_json)
+            
+            # 限制列表长度，只保留最近 100 轮对话
+            self.redis_conn.ltrim(conversation_key, 0, 99)
             
             # 设置过期时间（7天）
             self.redis_conn.expire(conversation_key, 7 * 24 * 3600)
             
-            # 添加到用户对话列表
-            user_conversations_key = f"user_conversations:{user_id}"
-            self.redis_conn.lpush(user_conversations_key, unique_id)
-            self.redis_conn.expire(user_conversations_key, 7 * 24 * 3600)
-            
-            logger.info(f"Stored conversation for user {user_id} with unique_id {unique_id}")
+            logger.info(f"Stored conversation for user {user_id}, conversation {conversation_id}")
             return True
             
         except Exception as e:
@@ -337,69 +329,38 @@ class RedisManager:
         conversation_id: str,
         limit: int = 3
     ) -> List[Dict[str, Any]]:
-        """获取最近的对话（排除当前对话）"""
+        """获取当前对话的最近几轮交互"""
         try:
+            conversation_key = f"conversation:{user_id}:{conversation_id}"
+            
+            # 获取最近 limit 条记录（LRANGE 返回从最新到最旧，因为用的是 LPUSH）
+            # 索引 0 是最新的，limit-1 是第 limit 条
+            conversation_list = self.redis_conn.lrange(conversation_key, 0, limit - 1)
+            
             conversations = []
-            user_conversations_key = f"user_conversations:{user_id}"
-            
-            # 获取对话ID列表（Redis lrange返回最新的在前面，需要反转）
-            all_conversation_ids = self.redis_conn.lrange(
-                user_conversations_key, 0, limit - 1
-            )
-            # 反转列表，让最新的对话在最后
-            all_conversation_ids = list(reversed(all_conversation_ids))
-            
-            # 处理对话ID
-            filtered_ids = []
-            for conv_id in all_conversation_ids:
-                # 处理可能的字节或字符串类型
+            for conv_json in conversation_list:
                 try:
-                    if isinstance(conv_id, bytes):
-                        conv_id_str = conv_id.decode('utf-8')
-                    else:
-                        conv_id_str = str(conv_id)
-                    
-                    # 检查是否属于当前对话（通过conversation_id前缀匹配）
-                    # 只排除完全匹配当前conversation_id的记录，不包括带时间戳的unique_id
-                    if conv_id_str != conversation_id:
-                        filtered_ids.append(conv_id_str)
-                except Exception as e:
-                    logger.warning(f"Failed to process conversation ID: {conv_id}, error: {e}")
+                    # 解析 JSON 数据
+                    conv_data = json.loads(conv_json)
+                    conversations.append({
+                        "conversation_id": conversation_id,
+                        "message": conv_data.get("message", ""),
+                        "response": conv_data.get("response", ""),
+                        "timestamp": conv_data.get("timestamp", ""),
+                        "metadata": conv_data.get("metadata", "{}")
+                    })
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse conversation data: {e}")
                     continue
             
-            for conv_id in filtered_ids:
-                conversation_key = f"conversation:{user_id}:{conv_id}"
-                
-                # 获取对话数据
-                conv_data = self.redis_conn.hgetall(conversation_key)
-                if conv_data:
-                    # 解码Redis返回的字节数据
-                    decoded_data = {}
-                    for k, v in conv_data.items():
-                        if isinstance(k, bytes):
-                            key = k.decode('utf-8')
-                        else:
-                            key = str(k)
-                        
-                        if isinstance(v, bytes):
-                            value = v.decode('utf-8')
-                        else:
-                            value = str(v)
-                        
-                        decoded_data[key] = value
-                    
-                    conversations.append({
-                        "conversation_id": conv_id,
-                        "message": decoded_data.get("message", ""),
-                        "response": decoded_data.get("response", ""),
-                        "timestamp": decoded_data.get("timestamp", ""),
-                        "metadata": decoded_data.get("metadata", "{}")
-                    })
+            # 反转列表，让最旧的在前，最新的在后（时间正序）
+            conversations.reverse()
             
+            logger.debug(f"Retrieved {len(conversations)} conversations for {user_id}:{conversation_id}")
             return conversations
             
         except Exception as e:
-            logger.error(f"Failed to get recent conversations: {e}")
+            logger.error(f"Failed to get recent conversations for {user_id}:{conversation_id}: {e}")
             return []
 
 

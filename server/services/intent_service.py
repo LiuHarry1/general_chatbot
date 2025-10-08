@@ -62,8 +62,8 @@ class LLMBasedIntentService:
         if recent_conversations:
             conversation_context = "\n最近的对话历史：\n"
             for conv in recent_conversations[-3:]:  # 最近3条对话
-                conversation_context += f"用户: {conv.get('user_message', '')}\n"
-                conversation_context += f"助手: {conv.get('ai_response', '')}\n\n"
+                conversation_context += f"用户: {conv.get('message', '')}\n"
+                conversation_context += f"助手: {conv.get('response', '')}\n\n"
         
         # 构建意图分析提示词
         intent_prompt = f"""
@@ -84,18 +84,6 @@ class LLMBasedIntentService:
 - 如果只是普通对话、学习编程、询问概念、寻求解释、教学等，选择 normal
 - 考虑对话历史的上下文，判断用户的真实需求
 
-特别注意：
-- 学习编程、询问编程概念、寻求代码解释、教学指导等属于 normal 意图
-- 只有明确要求执行代码、进行数据分析、生成图表等才属于 code 意图
-
-特别注意：
-- 天气查询（如"今天天气"、"某地天气"）属于实时数据需求，应归类为 search 意图
-- 股票、汇率、新闻等实时信息查询也应归类为 search 意图
-
-特别注意：
-- 画图、绘图、可视化、生成图表、绘制函数图、制作图表等需求都应该归类为 code 意图
-- 包括但不限于：sin图、cos图、函数图像、数据图表、统计图、流程图等
-
 请以JSON格式回答：
 {{
     "intent": "search|code|normal",
@@ -112,9 +100,7 @@ class LLMBasedIntentService:
                 file_content=None,
                 web_content=None,
                 search_results=None,
-                user_identity={},
-                contextual_prompt="",
-                short_term_context=""
+                full_context=""  # 意图分析不需要记忆上下文
             )
             
             # 解析LLM响应
@@ -310,42 +296,6 @@ class LLMBasedIntentService:
                 confidence=0.5,
                 reasoning=f"LLM分析失败，使用普通对话: {str(e)}"
             )
-    
-    async def process_with_memory(self, message: str, attachments: List[Dict] = None, user_id: str = "default_user") -> Tuple[IntentResult, Dict[str, Any], str, str]:
-        """
-        带记忆的意图处理
-        返回: (intent_result, user_profile, contextual_prompt, short_term_context)
-        """
-        # 获取最近对话历史用于LLM意图分析
-        recent_conversations = None
-        try:
-            # 这里需要从短期记忆获取最近对话
-            # 暂时使用空列表，实际实现时需要集成短期记忆系统
-            recent_conversations = []
-        except Exception as e:
-            app_logger.error(f"获取对话历史失败: {e}")
-            recent_conversations = []
-        
-        # 处理意图识别（包含对话历史）
-        intent_result = await self.process_intent(message, attachments, user_id, recent_conversations)
-        
-        # 这里可以集成长短期记忆系统
-        # 暂时返回空的记忆上下文
-        user_profile = {}
-        contextual_prompt = ""
-        short_term_context = ""
-        
-        # 可以根据意图类型添加特定的记忆上下文
-        if intent_result.intent == IntentType.FILE:
-            contextual_prompt += "\n\n用户正在分析文件内容，请根据文件内容回答问题。"
-        elif intent_result.intent == IntentType.WEB:
-            contextual_prompt += "\n\n用户正在分析网页内容，请根据网页内容回答问题。"
-        elif intent_result.intent == IntentType.SEARCH:
-            contextual_prompt += "\n\n用户正在进行网络搜索，请根据搜索结果回答问题。"
-        elif intent_result.intent == IntentType.CODE:
-            contextual_prompt += "\n\n用户需要执行Python代码进行数据分析或计算，请帮助编写和执行代码。"
-        
-        return intent_result, user_profile, contextual_prompt, short_term_context
 
 
 # 全局服务实例

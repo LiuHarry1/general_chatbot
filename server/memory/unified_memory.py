@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import logging
 
-from utils.logger import app_logger
+from utils.logger import app_logger, log_execution_time
 from memory.short_term_memory import short_term_memory
 from memory.long_term_memory import long_term_memory
 
@@ -116,6 +116,7 @@ class UnifiedMemoryManager:
             results["error"] = str(e)
             return results
     
+    @log_execution_time(threshold_ms=50)
     async def get_conversation_context(
         self,
         user_id: str,
@@ -124,13 +125,8 @@ class UnifiedMemoryManager:
         limit: int = 3
     ) -> Dict[str, Any]:
         """获取完整的对话上下文"""
-        app_logger.info(f"🧠 [UNIFIED] Getting conversation context for {user_id}:{conversation_id}")
-        app_logger.info(f"💬 [UNIFIED] Current message: {current_message[:100]}...")
-        
         context = {
-            "short_term_context": "",
-            "long_term_context": "",
-            "user_profile": {},
+            "full_context": "",  # 只返回 full_context，包含所有记忆
             "metadata": {
                 "user_id": user_id,
                 "conversation_id": conversation_id,
@@ -143,36 +139,30 @@ class UnifiedMemoryManager:
             
             # 获取短期记忆上下文
             if self.short_term_memory.enabled:
-                app_logger.info(f"🔍 [UNIFIED] Getting short-term context")
                 tasks.append(
                     self.short_term_memory.get_recent_context(
                         user_id, conversation_id, limit
                     )
                 )
             else:
-                app_logger.info(f"🔍 [UNIFIED] Short-term memory disabled")
                 tasks.append(asyncio.create_task(self._empty_short_term_context()))
             
             # 获取长期记忆上下文
             if self.long_term_memory.enabled:
-                app_logger.info(f"🔍 [UNIFIED] Getting long-term context")
                 tasks.append(
                     self.long_term_memory.search_relevant_memories(
                         user_id, current_message, limit
                     )
                 )
             else:
-                app_logger.info(f"🔍 [UNIFIED] Long-term memory disabled")
                 tasks.append(asyncio.create_task(self._empty_long_term_context()))
             
             # 获取用户画像
             if self.long_term_memory.enabled:
-                app_logger.info(f"🔍 [UNIFIED] Getting user profile")
                 tasks.append(
                     self.long_term_memory.get_user_profile(user_id)
                 )
             else:
-                app_logger.info(f"🔍 [UNIFIED] User profile disabled")
                 tasks.append(asyncio.create_task(self._empty_user_profile()))
             
             # 等待所有任务完成
@@ -181,57 +171,38 @@ class UnifiedMemoryManager:
             )
             
             # 处理短期记忆结果
+            short_term_context = ""
             if isinstance(short_term_result, Exception):
-                app_logger.error(f"❌ [UNIFIED] Short-term memory error: {short_term_result}")
-                context["short_term_context"] = ""
+                app_logger.error(f"❌ Short-term memory error: {short_term_result}")
                 context["metadata"]["short_term_error"] = str(short_term_result)
             else:
-                context["short_term_context"] = short_term_result.get("context", "")
+                short_term_context = short_term_result.get("context", "")
                 context["metadata"]["short_term_metadata"] = short_term_result.get("metadata", {})
-                app_logger.info(f"✅ [UNIFIED] Short-term context length: {len(context['short_term_context'])} characters")
-                if context["short_term_context"]:
-                    app_logger.info(f"📄 [UNIFIED] Short-term content: {context['short_term_context'][:200]}...")
             
             # 处理长期记忆结果
+            long_term_memories = []
             if isinstance(long_term_result, Exception):
-                app_logger.error(f"❌ [UNIFIED] Long-term memory error: {long_term_result}")
-                context["long_term_context"] = ""
+                app_logger.error(f"❌ Long-term memory error: {long_term_result}")
                 context["metadata"]["long_term_error"] = str(long_term_result)
             else:
-                memories = long_term_result.get("memories", [])
-                context["long_term_context"] = self._format_long_term_memories(memories)
+                long_term_memories = long_term_result.get("memories", [])
                 context["metadata"]["long_term_metadata"] = long_term_result.get("metadata", {})
-                app_logger.info(f"✅ [UNIFIED] Long-term memories found: {len(memories)}")
-                app_logger.info(f"📄 [UNIFIED] Long-term context length: {len(context['long_term_context'])} characters")
-                if context["long_term_context"]:
-                    app_logger.info(f"📄 [UNIFIED] Long-term content: {context['long_term_context'][:200]}...")
-                
-                # 打印每个记忆的详细信息
-                for i, memory in enumerate(memories):
-                    app_logger.info(f"🧠 [LONG-TERM] Memory {i+1}: {memory.get('content', '')[:100]}... (importance: {memory.get('importance_score', 0):.2f})")
             
             # 处理用户画像结果
+            user_profile = {}
             if isinstance(profile_result, Exception):
-                app_logger.error(f"❌ [UNIFIED] User profile error: {profile_result}")
-                context["user_profile"] = {}
+                app_logger.error(f"❌ User profile error: {profile_result}")
                 context["metadata"]["profile_error"] = str(profile_result)
             else:
-                context["user_profile"] = profile_result.get("profile", {})
+                user_profile = profile_result.get("profile", {})
                 context["metadata"]["profile_metadata"] = profile_result.get("metadata", {})
-                app_logger.info(f"✅ [UNIFIED] User profile retrieved for {user_id}")
-                
-                # 打印用户画像详细信息
-                profile = context["user_profile"]
-                if profile:
-                    app_logger.info(f"👤 [USER-PROFILE] Identity: {profile.get('identity', {})}")
-                    app_logger.info(f"🎯 [USER-PROFILE] Preferences: {profile.get('preferences', [])}")
-                    app_logger.info(f"💡 [USER-PROFILE] Interests: {profile.get('interests', [])}")
-                    app_logger.info(f"📊 [USER-PROFILE] Behavior patterns: {profile.get('behavior_patterns', [])}")
-                else:
-                    app_logger.info(f"👤 [USER-PROFILE] No profile data found for {user_id}")
             
-            # 构建完整上下文
-            context["full_context"] = self._build_full_context(context)
+            # 构建完整上下文 - 包含所有记忆信息
+            context["full_context"] = self._build_full_context(
+                user_profile=user_profile,
+                long_term_memories=long_term_memories,
+                short_term_context=short_term_context
+            )
             app_logger.info(f"📄 [UNIFIED] Full context length: {len(context['full_context'])} characters")
             app_logger.info(f"📄 [UNIFIED] Full context: {context['full_context'][:300]}...")
             
@@ -335,57 +306,32 @@ class UnifiedMemoryManager:
         
         return "\n".join(formatted)
     
-    def _build_full_context(self, context: Dict[str, Any]) -> str:
-        """构建完整的上下文"""
+    def _build_full_context(
+        self, 
+        user_profile: Dict[str, Any],
+        long_term_memories: List[Dict[str, Any]],
+        short_term_context: str
+    ) -> str:
+        """构建完整的上下文，包含所有记忆信息"""
         parts = []
         
         # 添加用户画像信息
-        user_profile = context.get("user_profile", {})
         if user_profile:
             parts.append("以下是关于用户的一些已知信息，请在对话中自然地利用这些信息，让用户感受到你认识他们：")
             parts.append(self._format_user_profile(user_profile))
         
         # 添加长期记忆上下文
-        long_term_context = context.get("long_term_context", "")
+        long_term_context = self._format_long_term_memories(long_term_memories)
         if long_term_context:
             parts.append("\n相关历史记忆：")
             parts.append(long_term_context)
         
         # 添加短期记忆上下文
-        short_term_context = context.get("short_term_context", "")
         if short_term_context:
             parts.append("\n最近对话：")
             parts.append(short_term_context)
         
         full_context = "\n".join(parts)
-        
-        # 打印最终prompt的详细内容
-        app_logger.info("=" * 80)
-        app_logger.info("🤖 [FINAL-PROMPT] 最终喂给大语言模型的完整Prompt:")
-        app_logger.info("=" * 80)
-        
-        if user_profile:
-            app_logger.info("👤 [USER-PROFILE] 用户画像数据:")
-            app_logger.info(f"📄 [USER-PROFILE] {self._format_user_profile(user_profile)}")
-        else:
-            app_logger.info("👤 [USER-PROFILE] 无用户画像数据")
-        
-        if long_term_context:
-            app_logger.info("🧠 [LONG-TERM] 长期记忆数据:")
-            app_logger.info(f"📄 [LONG-TERM] {long_term_context}")
-        else:
-            app_logger.info("🧠 [LONG-TERM] 无长期记忆数据")
-        
-        if short_term_context:
-            app_logger.info("💬 [SHORT-TERM] 短期记忆数据:")
-            app_logger.info(f"📄 [SHORT-TERM] {short_term_context}")
-        else:
-            app_logger.info("💬 [SHORT-TERM] 无短期记忆数据")
-        
-        app_logger.info("🤖 [FINAL-PROMPT] 完整Prompt内容:")
-        app_logger.info(f"📄 [FINAL-PROMPT] {full_context}")
-        app_logger.info("=" * 80)
-        
         return full_context
     
     def _format_user_profile(self, profile: Dict[str, Any]) -> str:
