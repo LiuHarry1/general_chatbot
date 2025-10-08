@@ -33,13 +33,10 @@ const App: React.FC = () => {
   // 使用对话管理hook
   const {
     conversations,
-    setConversations,
     currentConversationId,
-    setCurrentConversationId,
     messages,
     setMessages,
     isLoading,
-    setIsLoading,
     createNewConversation,
     selectConversation,
     deleteConversation,
