@@ -362,6 +362,50 @@ class RedisManager:
         except Exception as e:
             logger.error(f"Failed to get recent conversations for {user_id}:{conversation_id}: {e}")
             return []
+    
+    async def get_conversation_summary(
+        self,
+        user_id: str,
+        conversation_id: str,
+        layer: str = "L1"
+    ) -> Optional[str]:
+        """获取对话摘要（支持分层：L1/L2/L3）"""
+        try:
+            summary_key = f"conversation_summary:{user_id}:{conversation_id}:{layer}"
+            summary = self.redis_conn.get(summary_key)
+            
+            if summary:
+                logger.debug(f"Retrieved {layer} summary for {user_id}:{conversation_id}")
+                if isinstance(summary, bytes):
+                    return summary.decode('utf-8')
+                return str(summary)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get conversation summary for {user_id}:{conversation_id} ({layer}): {e}")
+            return None
+    
+    async def set_conversation_summary(
+        self,
+        user_id: str,
+        conversation_id: str,
+        summary: str,
+        layer: str = "L1",
+        ttl: int = 86400 * 30
+    ) -> bool:
+        """存储对话摘要（支持分层：L1/L2/L3）"""
+        try:
+            summary_key = f"conversation_summary:{user_id}:{conversation_id}:{layer}"
+            result = self.redis_conn.setex(summary_key, ttl, summary)
+            
+            if result:
+                logger.info(f"Stored {layer} summary for {user_id}:{conversation_id}")
+            return bool(result)
+            
+        except Exception as e:
+            logger.error(f"Failed to store conversation summary for {user_id}:{conversation_id} ({layer}): {e}")
+            return False
 
 
 # 全局实例

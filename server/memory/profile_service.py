@@ -233,7 +233,7 @@ class ProfileService:
             existing_profile["expires_at"] = expiry_date.isoformat()
             
             # 保存更新后的画像（使用过期时间）
-            await redis_manager.set_user_profile(user_id, existing_profile, expiry_seconds=self.expiry_days * 24 * 60 * 60)
+            await redis_manager.set_user_profile(user_id, existing_profile, ttl=self.expiry_days * 24 * 60 * 60)
             
             app_logger.info(f"用户画像已更新: {user_id}")
             
